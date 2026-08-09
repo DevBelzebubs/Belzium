@@ -11,3 +11,6 @@ export {
     computed,
     ComputedRef
 } from "./reactive/computed";
+import {
+    watchEffect
+} from "../src/reactive/watch";

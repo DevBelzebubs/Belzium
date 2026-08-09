@@ -1,24 +1,27 @@
-export type EffectFn = () => void;
+export type EffectFn<T = any> = () => T;
 export type EffectScheduler = () => void;
+
+
+
+
 const effectStack: ReactiveEffect[] = [];
 export interface EffectOptions {
     scheduler?: EffectScheduler;
     onStop?: () => void;
 }
-export class ReactiveEffect {
+export class ReactiveEffect<T = any> {
     public active = true;
     public running = false;
     public deps: Set<ReactiveEffect>[] = [];
     constructor(
         public fn: EffectFn, public scheduler?: EffectScheduler, public onStop?: () => void
     ) {}
-    run() : void {
+    run() : T | undefined { // Ejecuta el efecto y trackea las dependencias
         if(!this.active) { // Si el efecto no está activo, simplemente ejecuta la función sin trackear dependencias
-            this.fn();
-            return;
+            return this.fn();
         }
         if (this.running) {
-            return;
+            return undefined; // Evita reentrar en el mismo efecto mientras ya se está ejecutando
         }
         this.cleanup(); // Limpia las dependencias anteriores antes de ejecutar el efecto
         this.running = true;
@@ -26,10 +29,13 @@ export class ReactiveEffect {
         activeEffect = this;
 
         try {
-            this.fn();
+            return this.fn();
         } finally {
             effectStack.pop(); // Elimina el efecto actual del stack de efectos
-            activeEffect = effectStack[effectStack.length - 1] || null; // Setea el activeEffect al último efecto en el stack o a null si el stack está vacío
+            activeEffect =
+                effectStack[
+                    effectStack.length - 1
+                ] ?? null; // Setea el activeEffect al último efecto en el stack o a null si el stack está vacío
             this.running = false;
         }
     }
