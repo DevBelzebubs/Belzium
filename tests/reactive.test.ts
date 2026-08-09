@@ -3,6 +3,7 @@ import { reactive } from '../src/reactive/reactive';
 import { effect } from '../src/reactive/effect';
 import { computed } from '../src/reactive/computed';
 import { watch } from '../src/reactive/watch';
+import { ref } from '../src/reactive/ref';
 
 describe('reactive', () => {
     it('deberia de crear un objeto reactivo', () => { // Test 1
@@ -258,6 +259,42 @@ it("Deberia deduplicar jobs en cola", async () => {
     expect(calls).toBe(0);
     await Promise.resolve();
     expect(calls).toBe(1);
+});
+it("Deberia de crear una variable reactiva", () => {
+
+    const count = ref(0);
+
+    let dummy = 0;
+
+    effect(() => {
+        dummy = count.value;
+    });
+
+    expect(dummy).toBe(0);
+
+    count.value = 1;
+
+    expect(dummy).toBe(1);
+});
+it("Deberia reaccionar profundamente a objetos embebidos", () => {
+
+    const state = reactive({
+        user: {
+            name: "Juan"
+        }
+    });
+
+    let dummy = "";
+
+    effect(() => {
+        dummy = state.user.name;
+    });
+
+    expect(dummy).toBe("Juan");
+
+    state.user.name = "Pedro";
+
+    expect(dummy).toBe("Pedro");
 });
 });
 describe("computed", () => {
