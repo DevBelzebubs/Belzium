@@ -152,9 +152,10 @@ it("Deberia de prevenir la ejecución recursiva del efecto", () => {
     expect(state.count).toBe(1);
     expect(runs).toBe(1);
 });
+});
 describe("computed", () => {
 
-    it("should lazily evaluate", () => {
+    it("Deberia de evaluar lazy", () => {
         const state = reactive({
             count: 1
         });
@@ -172,5 +173,24 @@ describe("computed", () => {
         expect(doubled.value).toBe(2);
         expect(runs).toBe(1);
     });
+    it("Deberia de invalidar cuando las dependencias cambian", () => {
+    const state = reactive({
+        count: 1
+    });
+
+    let runs = 0;
+
+    const doubled = computed(() => {
+        runs++;
+
+        return state.count * 2;
+    });
+    expect(doubled.value).toBe(2);
+    expect(runs).toBe(1);
+
+    state.count = 2;
+    expect(runs).toBe(1);
+    expect(doubled.value).toBe(4);
+    expect(runs).toBe(2);
 });
 });
