@@ -2,6 +2,7 @@ import { describe, it, expect} from 'vitest';
 import { reactive } from '../src/reactive/reactive';
 import { effect } from '../src/reactive/effect';
 import { computed } from '../src/reactive/computed';
+import { watch } from '../src/reactive/watch';
 
 describe('reactive', () => {
     it('deberia de crear un objeto reactivo', () => { // Test 1
@@ -195,6 +196,68 @@ it("Deberia remover los efectos de cada dependencia", () => {
     state.b = 20;
 
     expect(dummy).toBe(3);
+});
+it("Deberia de hacer flush de manera sincrónica", () => {
+    const state = reactive({
+        count: 0
+    });
+    let calls = 0;
+
+    watch(
+        () => state.count,
+        () => {
+            calls++;
+        },
+        {
+            flush: "sync"
+        }
+    );
+
+    state.count++;
+    expect(calls).toBe(1);
+});
+it("Deberia de hacer flush de manera asíncrónica", async () => {
+    const state = reactive({
+        count: 0
+    });
+    let calls = 0;
+
+    watch(
+        () => state.count,
+        () => {
+            calls++;
+        },
+        {
+            flush: "pre"
+        }
+    );
+    state.count++;
+    expect(calls).toBe(0);
+    await Promise.resolve();
+    expect(calls).toBe(1);
+});
+it("Deberia deduplicar jobs en cola", async () => {
+    const state = reactive({
+        count: 0
+    });
+    let calls = 0;
+    watch(
+        () => state.count,
+        () => {
+            calls++;
+        },
+        {
+            flush: "pre"
+        }
+    );
+
+    state.count++;
+    state.count++;
+    state.count++;
+
+    expect(calls).toBe(0);
+    await Promise.resolve();
+    expect(calls).toBe(1);
 });
 });
 describe("computed", () => {

@@ -1,7 +1,11 @@
 import {
     ReactiveEffect
 } from "./effect";
+import { queueJob } from "./scheduler";
 export type WatchSource<T> = () => T;
+export interface WatchOptions {
+    flush?: "sync" | "pre"; // Uno ejecuta de manera inmediata y otro usa jobs
+}
 
 export type WatchCallback<T> =
     (newValue: T, oldValue: T) => void;
@@ -18,14 +22,21 @@ export function watchEffect(
 }
 export function watch<T>(
     source: WatchSource<T>,
-    callback: WatchCallback<T>
+    callback: WatchCallback<T>,
+    options: WatchOptions = {}
 ): ReactiveEffect<T> {
     let oldValue!: T;
-    const effect = new ReactiveEffect(source, () => {
-        const newValue = effect.run(); //Cuando hay nuevo valor, trackea las dependencias
-        callback(newValue, oldValue);
+    const job = () => {
+        const newValue = effect.run();
+        callback(newValue, oldValue); // Actualiza el valor
         oldValue = newValue;
-    });
+    };
+    const scheduler = options.flush === "pre" ? () => queueJob(job) : job;
+    const effect =
+        new ReactiveEffect( // Crea un efecto reactivo para la función de watch
+            source,
+            scheduler
+        );
     oldValue = effect.run(); // Ejecuta el efecto para obtener el valor inicial y trackear las dependencias
     return effect;
 }
