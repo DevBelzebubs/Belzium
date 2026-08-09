@@ -9,7 +9,7 @@ describe('reactive', () => {
         state.count++; // Deberia de disparar el efecto y actualizar el valor
         expect(state.count).toBe(1);
     });
-    it("should rerun effect when dependency changes", () => { // Test 2
+    it("Deberia de volver a ejecutar el efecto cuando cambia la dependencia", () => { // Test 2
     const state = reactive({
         count: 0
     });
@@ -22,7 +22,7 @@ describe('reactive', () => {
     state.count = 10;
     expect(dummy).toBe(10);
     });
-    it("should only trigger effects for their dependencies", () => { // Test 3
+    it("Deberia de no ejecutar efectos innecesariamente", () => { // Test 3
     const state = reactive({
         count: 0,
         name: "Juan"
@@ -43,4 +43,34 @@ describe('reactive', () => {
     expect(countRuns).toBe(2);
     expect(nameRuns).toBe(1);
     });
+    it("Deberia de no trigger cuando el valor no cambia", () => {
+    const state = reactive({
+        count: 0
+    });
+    let runs = 0;
+    effect(() => {
+        state.count;
+        runs++;
+    });
+    expect(runs).toBe(1);
+    state.count = 1;
+    expect(runs).toBe(2);
+    state.count = 1;
+    expect(runs).toBe(2);
+});
+it("Deberia de reaccionar a cambios en multiples propiedades", () => {
+    const state = reactive({
+        count: 0,
+        name: "Juan"
+    });
+    let dummy = "";
+    effect(() => {
+        dummy = `${state.name}: ${state.count}`;
+    });
+    expect(dummy).toBe("Juan: 0");
+    state.count = 1;
+    expect(dummy).toBe("Juan: 1");
+    state.name = "Pedro";
+    expect(dummy).toBe("Pedro: 1");
+});
 });

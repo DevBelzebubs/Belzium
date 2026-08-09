@@ -8,8 +8,11 @@ export function reactive<T extends object>(target: T): T {
             return value;
         },
         set(target, property, value, receiver) {
+            const oldValue = Reflect.get(target, property, receiver);
             const result = Reflect.set(target, property, value, receiver);
-            trigger(target, property); // Llama a la función trigger para notificar los efectos
+            if(!Object.is(oldValue, value)) { //Trigger ejecuta en condicional para evitar renders inecesarios
+                trigger(target, property); // Llama a la función trigger para notificar los efectos
+            }
             return result;
         }
     });
