@@ -296,6 +296,246 @@ it("Deberia reaccionar profundamente a objetos embebidos", () => {
 
     expect(dummy).toBe("Pedro");
 });
+it("Deberia de reaccionar al cambio de indice de manera reactiva", () => {
+    const state = reactive({
+        items: [1, 2, 3]
+    });
+
+    let dummy = 0;
+
+    effect(() => {
+        dummy = state.items[0];
+    });
+
+    expect(dummy).toBe(1);
+
+    state.items[0] = 10;
+
+    expect(dummy).toBe(10);
+});
+it("Deberia de reaccionar a la longitud del array", () => {
+    const state = reactive({
+        items: [1, 2, 3]
+    });
+
+    let length = 0;
+
+    effect(() => {
+        length = state.items.length;
+    });
+
+    expect(length).toBe(3);
+
+    state.items.push(4);
+
+    expect(length).toBe(4);
+});
+it("Deberia de reaccionar a propiedades eliminadas", () => {
+    const state = reactive<{ name?: string }>({
+        name: "Juan"
+    });
+
+    let dummy = "";
+
+    effect(() => {
+        dummy = state.name ?? "Unknown";
+    });
+
+    expect(dummy).toBe("Juan");
+
+    delete state.name;
+
+    expect(dummy).toBe("Unknown");
+});
+it("Deberia de disparar los efectos de iteracion cuando la propiedad es eliminada", () => {
+    const state = reactive<{ name: string; age?: number }>({
+        name: "Juan",
+        age: 21
+    });
+
+    let keys: string[] = [];
+
+    effect(() => {
+        keys = Object.keys(state);
+    });
+
+    expect(keys).toEqual([
+        "name",
+        "age"
+    ]);
+
+    delete state.age;
+
+    expect(keys).toEqual([
+        "name"
+    ]);
+});
+it("Deberia de trackear el objeto en la iteración", () => {
+    const state = reactive<Record<string, unknown>>({
+        name: "Juan"
+    });
+
+    let keys: string[] = [];
+
+    effect(() => {
+        keys = Object.keys(state);
+    });
+
+    expect(keys).toEqual([
+        "name"
+    ]);
+
+    state.age = 21;
+    expect(keys).toEqual([
+        "name",
+        "age"
+    ]);
+});
+it("Deberia de reaccionar a los cambios de índices en arrays", () => {
+    const state = reactive({
+        items: [1, 2, 3]
+    });
+
+    let dummy = 0;
+
+    effect(() => {
+        dummy = state.items[0];
+    });
+
+    expect(dummy).toBe(1);
+    state.items[0] = 10;
+    expect(dummy).toBe(10);
+});
+it("Deberia de reaccionar dinamicamente cuando se añaden índices", () => {
+    const state = reactive<number[]>([]);
+
+    let dummy = 0;
+
+    effect(() => {
+        dummy = state[0] ?? 0;
+    });
+
+    expect(dummy).toBe(0);
+    state[0] = 10;
+    expect(dummy).toBe(10);
+});
+it("Deberia reaccionar al length del array", () => {
+    const state = reactive([1, 2, 3]);
+
+    let length = 0;
+
+    effect(() => {
+        length = state.length;
+    });
+
+    expect(length).toBe(3);
+
+    state.push(4);
+
+    expect(length).toBe(4);
+});
+it("Deberia de ejecutar el trigger de length cuando se añade un index", () => {
+    const state = reactive([1, 2, 3]);
+
+    let length = 0;
+
+    effect(() => {
+        length = state.length;
+    });
+
+    expect(length).toBe(3);
+
+    state[3] = 4;
+    expect(length).toBe(4);
+});
+it("Deberia reaccionar a pop", () => {
+    const state = reactive([1, 2, 3]);
+    let length = 0;
+    effect(() => {
+        length = state.length;
+    });
+
+    state.pop();
+
+    expect(length).toBe(2);
+});
+it("Deberia de hacer trigger a los índices afectados por los cambios de length", () => {
+    const state = reactive([
+        1,
+        2,
+        3,
+        4
+    ]);
+
+    let dummy = 0;
+    effect(() => {
+        dummy = state[3] ?? 0;
+    });
+    expect(dummy).toBe(4);
+
+    state.length = 2;
+
+    expect(dummy).toBe(0);
+});
+it("Deberia de hacer trigger a los índices afectados por los cambios de length", () => {
+    const state = reactive([
+        1,
+        2,
+        3,
+        4
+    ]);
+
+    let firstRuns = 0;
+    let thirdRuns = 0;
+
+    effect(() => {
+        state[0];
+        firstRuns++;
+    });
+
+    effect(() => {
+        state[3];
+        thirdRuns++;
+    });
+
+    expect(firstRuns).toBe(1);
+    expect(thirdRuns).toBe(1);
+
+    state.length = 2;
+
+    expect(firstRuns).toBe(1);
+    expect(thirdRuns).toBe(2);
+});
+it("Deberia de reaccionar al valores map", () => {
+    const state = reactive(
+        new Map<string, number>()
+    );
+
+    let dummy = 0;
+
+    effect(() => {
+        dummy = state.get("count") ?? 0;
+    });
+
+    expect(dummy).toBe(0);
+    state.set("count", 10);
+    expect(dummy).toBe(10);
+});
+it("Deberia de trackear el Map.get", () => {
+    const state = reactive(
+        new Map<string, number>()
+    );
+
+    let dummy = 0;
+
+    effect(() => {
+        dummy = state.get("count") ?? 0;
+    });
+
+    expect(dummy).toBe(0);
+    state.set("count", 10);
+    expect(dummy).toBe(10);
+});
 });
 describe("computed", () => {
 
