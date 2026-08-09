@@ -73,4 +73,44 @@ it("Deberia de reaccionar a cambios en multiples propiedades", () => {
     state.name = "Pedro";
     expect(dummy).toBe("Pedro: 1");
 });
+it("Deberia de manejar efectos anidados", () => {
+    const state = reactive({
+        outer: 0,
+        inner: 0
+    });
+    let outerRuns = 0;
+    let innerRuns = 0;
+    effect(() => {
+        state.outer;
+        outerRuns++;
+
+        effect(() => {
+            state.inner;
+            innerRuns++;
+        });
+
+        state.outer;
+    });
+    expect(outerRuns).toBe(1);
+    expect(innerRuns).toBe(1);
+});
+it("Deberia de restaurar el efecto padre después del efecto anidado", () => {
+    const state = reactive({
+        outer: 0,
+        inner: 0
+    });
+    let outerValue = 0;
+
+    effect(() => {
+        state.outer;
+
+        effect(() => {
+            state.inner;
+        });
+
+        outerValue = state.outer;
+    });
+    state.outer = 1;
+    expect(outerValue).toBe(1);
+});
 });
