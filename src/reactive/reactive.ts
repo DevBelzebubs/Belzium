@@ -1,14 +1,12 @@
 import { track, trigger, ITERATE_KEY, MAP_KEY_ITERATE_KEY } from "./dependency";
+import { setReactiveFactory, toReactive, rawMap } from "./reactiveContext";
 const reactiveMap = new WeakMap<object, any>(); // Cache de objetos crudos que ya fueron envueltos en un proxy reactivo (evita proxies duplicados)
-
-const baseHandlers: ProxyHandler<object> = { // Handlers para objetos y arrays (acceso a propiedades, índices y length)
+const baseHandlers: ProxyHandler<object> = {
+  // Handlers para objetos y arrays (acceso a propiedades, índices y length)
   get(target, property, receiver) {
     const value = Reflect.get(target, property, receiver); // Obtiene el valor de la propiedad
     track(target, property); // Llama a la función track para registrar la dependencia
-    if (typeof value === "object" && value !== null) {
-      return reactive(value); // Si el valor es un objeto, lo convierte en reactivo (reactividad profunda)
-    }
-    return value;
+    return toReactive(value); // Si el valor no es un objeto, lo convierte a reactivo (si es un objeto) o lo retorna tal cual
   },
   set(target, property, value, receiver) {
     const hadKey = Object.prototype.hasOwnProperty.call(target, property);
@@ -44,7 +42,8 @@ const baseHandlers: ProxyHandler<object> = { // Handlers para objetos y arrays (
   },
 };
 
-const collectionHandlers: ProxyHandler<object> = { // Handlers para Map y Set (los métodos internos no se pueden invocar con el proxy como receiver)
+const collectionHandlers: ProxyHandler<object> = {
+  // Handlers para Map y Set (los métodos internos no se pueden invocar con el proxy como receiver)
   get(target, key, receiver) {
     if (key === "size" && (target instanceof Map || target instanceof Set)) {
       track(target, ITERATE_KEY); // Trackea la iteración: size cambia al añadir/eliminar elementos
@@ -58,7 +57,10 @@ const collectionHandlers: ProxyHandler<object> = { // Handlers para Map y Set (l
         return value;
       };
     }
-    if ((key === "has" || key === "delete") && (target instanceof Map || target instanceof Set)) {
+    if (
+      (key === "has" || key === "delete") &&
+      (target instanceof Map || target instanceof Set)
+    ) {
       // Map y Set comparten la firma de has() y delete(), se unifican en una sola rama (en Set la key es el valor)
       if (key === "has") {
         return (value: unknown) => {
@@ -100,8 +102,10 @@ const collectionHandlers: ProxyHandler<object> = { // Handlers para Map y Set (l
         return receiver; // Set.prototype.add retorna el Set, se devuelve el proxy para mantener la cadena
       };
     }
-    if ((target instanceof Map && (key === "keys" || key === "entries")) ||
-        (target instanceof Set && (key === "keys" || key === "values"))) {
+    if (
+      (target instanceof Map && (key === "keys" || key === "entries")) ||
+      (target instanceof Set && (key === "keys" || key === "values"))
+    ) {
       // Los iteradores nativos se pueden usar sobre el objeto crudo y solo trackean la iteración (reaccionan a ADD/DELETE)
       return () => {
         track(target, ITERATE_KEY);
@@ -111,12 +115,17 @@ const collectionHandlers: ProxyHandler<object> = { // Handlers para Map y Set (l
     if (key === "values" || key === Symbol.iterator) {
       if (target instanceof Map) {
         // Usa mapIterator para trackear además cada key durante la iteración (un SET en esa key re-ejecuta el efecto)
-        return () => mapIterator(target, key === "values" ? "values" : "entries");
+        return () =>
+          mapIterator(target, key === "values" ? "values" : "entries");
       }
     }
     if (key === "forEach" && target instanceof Map) {
       return (
-        callback: (value: unknown, key: unknown, map: Map<unknown, unknown>) => void,
+        callback: (
+          value: unknown,
+          key: unknown,
+          map: Map<unknown, unknown>,
+        ) => void,
       ) => {
         track(target, ITERATE_KEY); // Trackea la iteración (reacciona a ADD/DELETE)
         target.forEach((value, mapKey) => {
@@ -135,16 +144,23 @@ export function reactive<T extends object>(target: T): T {
   if (existing) {
     return existing;
   }
+  if (rawMap.has(target)) {
+    return target; // Si el valor ya es un proxy reactivo, se retorna tal cual (evita crear un proxy de un proxy)
+  }
   // Los Map y Set necesitan handlers especiales porque sus métodos internos no se pueden invocar con el proxy como receiver
-  const handler = isMap(target) || isSet(target) ? collectionHandlers : baseHandlers;
+  const handler =
+    isMap(target) || isSet(target) ? collectionHandlers : baseHandlers;
   const proxy = new Proxy(target, handler) as T;
   reactiveMap.set(target, proxy); // Cachea el proxy asociado al objeto crudo
+  rawMap.set(proxy, target);
   return proxy;
 }
-function isMap(value: unknown): value is Map<unknown, unknown> { // Type guard para identificar Maps
+function isMap(value: unknown): value is Map<unknown, unknown> {
+  // Type guard para identificar Maps
   return value instanceof Map;
 }
-function isSet(value: unknown): value is Set<unknown> { // Type guard para identificar Sets
+function isSet(value: unknown): value is Set<unknown> {
+  // Type guard para identificar Sets
   return value instanceof Set;
 }
 
@@ -155,7 +171,8 @@ function mapIterator( // Trackea cada key de manera individual durante la iterac
   // Trackea la iteración: MAP_KEY_ITERATE_KEY para keys y ITERATE_KEY para values/entries (reaccionan a ADD/DELETE)
   track(target, kind === "keys" ? MAP_KEY_ITERATE_KEY : ITERATE_KEY);
 
-  return (function* () { // Generador que recorre las entradas del Map crudo
+  return (function* () {
+    // Generador que recorre las entradas del Map crudo
     for (const [mapKey, mapValue] of target.entries()) {
       track(target, mapKey as PropertyKey); // Trackea cada key individual para que un SET dispare los efectos de iteración
       yield kind === "keys" // Hace yield solo de lo que pide el kind
@@ -166,3 +183,4 @@ function mapIterator( // Trackea cada key de manera individual durante la iterac
     }
   })();
 }
+setReactiveFactory(reactive);

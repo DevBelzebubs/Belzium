@@ -4,6 +4,7 @@ import { effect } from '../src/reactive/effect';
 import { computed } from '../src/reactive/computed';
 import { watch } from '../src/reactive/watch';
 import { ref } from '../src/reactive/ref';
+import { toRaw } from '../src/reactive/reactiveContext';
 
 describe('reactive', () => {
     it('deberia de crear un objeto reactivo', () => { // Test 1
@@ -907,6 +908,30 @@ it("Deberia reaccionar a la iteración del set key", () => {
     expect(values).toEqual([1]);
     state.add(2);
     expect(values).toEqual([1, 2]);
+});
+it("No deberia de crear un proxy desde un proxy", () => {
+    const raw = {
+        count: 0
+    };
+
+    const state =
+        reactive(raw);
+    const again =
+        reactive(state);
+    expect(again)
+        .toBe(state);
+});
+it("Deberia de retornar el objeto crudo", () => {
+    const raw = {
+        count: 0
+    };
+
+    const state =
+        reactive(raw);
+
+    expect(
+        toRaw(state)
+    ).toBe(raw);
 });
 });
 describe("computed", () => {
