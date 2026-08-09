@@ -29,6 +29,10 @@ export function trigger(target: object, key: PropertyKey) {
     if(!deps) return;
     const effects = new Set(deps);
     effects.forEach(effect => {
-        effect.run(); // Ejecuta cada efecto una sola vez
+        if (effect.scheduler) { // Si el efecto tiene un scheduler, ejecuta el scheduler en lugar de ejecutar el efecto directamente
+        effect.scheduler();
+    } else {
+        effect.run(); // Ejecuta el efecto una vez
+    }
     });
 }

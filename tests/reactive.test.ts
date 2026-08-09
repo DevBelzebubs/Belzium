@@ -1,6 +1,7 @@
 import { describe, it, expect} from 'vitest';
 import { reactive } from '../src/reactive/reactive';
 import { effect } from '../src/reactive/effect';
+import { computed } from '../src/reactive/computed';
 
 describe('reactive', () => {
     it('deberia de crear un objeto reactivo', () => { // Test 1
@@ -150,5 +151,26 @@ it("Deberia de prevenir la ejecución recursiva del efecto", () => {
     });
     expect(state.count).toBe(1);
     expect(runs).toBe(1);
+});
+describe("computed", () => {
+
+    it("should lazily evaluate", () => {
+        const state = reactive({
+            count: 1
+        });
+
+        let runs = 0;
+
+        const doubled = computed(() => {
+            runs++;
+
+            return state.count * 2;
+        });
+        expect(runs).toBe(0);
+        expect(doubled.value).toBe(2);
+        expect(runs).toBe(1);
+        expect(doubled.value).toBe(2);
+        expect(runs).toBe(1);
+    });
 });
 });

@@ -1,10 +1,11 @@
 export type EffectFn = () => void;
+export type EffectScheduler = () => void;
 const effectStack: ReactiveEffect[] = [];
 export class ReactiveEffect {
     public active = true;
     public running = false;
     public deps: Set<ReactiveEffect>[] = [];
-    constructor(public fn: EffectFn) {}
+    constructor(public fn: EffectFn, public scheduler?: EffectScheduler) {}
     run() : void {
         if(!this.active) { // Si el efecto no está activo, simplemente ejecuta la función sin trackear dependencias
             this.fn();
