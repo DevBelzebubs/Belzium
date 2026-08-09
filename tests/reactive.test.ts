@@ -113,4 +113,42 @@ it("Deberia de restaurar el efecto padre después del efecto anidado", () => {
     state.outer = 1;
     expect(outerValue).toBe(1);
 });
+it("Deberia de limpiar dependencias obsoletas", () => {
+    const state = reactive({
+        condition: true,
+        a: 10,
+        b: 20
+    });
+
+    let dummy = 0;
+    effect(() => {
+        if (state.condition) {
+            dummy = state.a;
+        } else {
+            dummy = state.b;
+        }
+    });
+
+    expect(dummy).toBe(10);
+    state.condition = false;
+    expect(dummy).toBe(20);
+    state.a = 100;
+    expect(dummy).toBe(20);
+});
+it("Deberia de prevenir la ejecución recursiva del efecto", () => {
+    const state = reactive({
+        count: 0
+    });
+    let runs = 0;
+
+    effect(() => {
+        runs++;
+
+        if (state.count < 1) {
+            state.count++;
+        }
+    });
+    expect(state.count).toBe(1);
+    expect(runs).toBe(1);
+});
 });

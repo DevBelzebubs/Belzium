@@ -21,12 +21,14 @@ export function track(target: object, key: PropertyKey) {
 }
 export function trigger(target: object, key: PropertyKey) {
     const depsMap = targetMap.get(target); // Map del objeto
+    
     if(!depsMap) return;
 
     const deps = depsMap.get(key); // Set de efectos para la propiedad
     
     if(!deps) return;
-    deps.forEach(effect => {
-        effect.run(); // Ejecuta cada efecto
+    const effects = new Set(deps);
+    effects.forEach(effect => {
+        effect.run(); // Ejecuta cada efecto una sola vez
     });
 }
