@@ -1,8 +1,8 @@
 import { activeEffect, ReactiveEffect } from "./effect";
 const targetMap = new WeakMap<object, Map<PropertyKey, Set<ReactiveEffect>>>();
 type TriggerType = "SET" | "ADD" | "DELETE";
-export const ITERATE_KEY = Symbol("iterate");
-
+export const ITERATE_KEY = Symbol("iterate"); // Key especial trackeada al iterar (Object.keys, for..in, size, iteradores de colecciones)
+export const MAP_KEY_ITERATE_KEY = Symbol("Map key iterate"); // Key especial para la iteración de keys de un Map
 const isArrayIndex = (key: PropertyKey): boolean =>
   typeof key === "string" &&
   Number.isInteger(Number(key)) &&
@@ -53,8 +53,10 @@ export function trigger(
       });
     }
   }
-  if (Array.isArray(target) && key === "length" && type === "SET") { // Si se está estableciendo la longitud de un array, se dispara los efectos de los índices
+  if (Array.isArray(target) && key === "length" && type === "SET") {
+    // Si se está estableciendo la longitud de un array, se dispara los efectos de los índices
     const newLength = Number(newValue);
+    const iterateEffects = depsMap.get(ITERATE_KEY);
     depsMap.forEach((dep, depKey) => {
       if (isArrayIndex(depKey) && Number(depKey) >= newLength) {
         dep.forEach((effect) => {
@@ -70,6 +72,15 @@ export function trigger(
       iterateEffects.forEach((effect) => {
         effects.add(effect);
       });
+    }
+    if (target instanceof Map) {
+      const mapKeyEffects = depsMap.get(MAP_KEY_ITERATE_KEY);
+
+      if (mapKeyEffects) {
+        mapKeyEffects.forEach((effect) => {
+          effects.add(effect);
+        });
+      }
     }
   }
   triggerEffect(effects);

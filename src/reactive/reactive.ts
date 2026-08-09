@@ -1,12 +1,12 @@
-import { track, trigger, ITERATE_KEY } from "./dependency";
-const reactiveMap = new WeakMap<object, any>();
+import { track, trigger, ITERATE_KEY, MAP_KEY_ITERATE_KEY } from "./dependency";
+const reactiveMap = new WeakMap<object, any>(); // Cache de objetos crudos que ya fueron envueltos en un proxy reactivo (evita proxies duplicados)
 
-const baseHandlers: ProxyHandler<object> = {
+const baseHandlers: ProxyHandler<object> = { // Handlers para objetos y arrays (acceso a propiedades, índices y length)
   get(target, property, receiver) {
-    const value = Reflect.get(target, property, receiver);
+    const value = Reflect.get(target, property, receiver); // Obtiene el valor de la propiedad
     track(target, property); // Llama a la función track para registrar la dependencia
     if (typeof value === "object" && value !== null) {
-      return reactive(value);
+      return reactive(value); // Si el valor es un objeto, lo convierte en reactivo (reactividad profunda)
     }
     return value;
   },
@@ -44,29 +44,38 @@ const baseHandlers: ProxyHandler<object> = {
   },
 };
 
-const collectionHandlers: ProxyHandler<object> = {
+const collectionHandlers: ProxyHandler<object> = { // Handlers para Map y Set (los métodos internos no se pueden invocar con el proxy como receiver)
   get(target, key, receiver) {
-    const raw = target as Map<unknown, unknown>; // Los métodos internos de Map no se pueden invocar con el proxy como receiver
-    if (key === "size") {
-      track(raw, ITERATE_KEY);
-      return Reflect.get(raw, key, raw);
+    const raw = target as Map<unknown, unknown>; // Referencia al objeto crudo para operar sobre él directamente
+    if (key === "size" && (target instanceof Map || target instanceof Set)) {
+      track(target, ITERATE_KEY); // Trackea la iteración: size cambia al añadir/eliminar elementos
+      return Reflect.get(target, "size", target); // Lee size sobre el objeto crudo porque el getter nativo no acepta el proxy como receiver
     }
-    if (key === "get") {
+    if (key === "get" && target instanceof Map) {
+      // Se intercepta la llamada a Map.prototype.get para trackear la dependencia
       return (mapKey: PropertyKey) => {
         const value = raw.get(mapKey);
         track(raw, mapKey);
         return value;
       };
     }
-    if (key === "has") {
+    if (key === "has" && target instanceof Map) {
       return (mapKey: PropertyKey) => {
-        const result = raw.has(mapKey);
+        const result = raw.has(mapKey); // Se intercepta la llamada a Map.prototype.has para trackear la dependencia
         track(raw, mapKey);
+        return result;
+      };
+    }
+    if (key === "has" && target instanceof Set) {
+      return (value: unknown) => {
+        const result = target.has(value); // Verifica si el valor existe en el Set crudo
+        track(target, value as PropertyKey); // Trackea la dependencia de ese valor
         return result;
       };
     }
     if (key === "set") {
       return (mapKey: PropertyKey, value: unknown) => {
+        // Se intercepta la llamada a Map.prototype.set para trackear y trigger los efectos correspondientes
         const hadKey = raw.has(mapKey);
         const oldValue = raw.get(mapKey);
         raw.set(mapKey, value);
@@ -78,7 +87,7 @@ const collectionHandlers: ProxyHandler<object> = {
         return receiver; // Map.prototype.set retorna el mapa, se devuelve el proxy para mantener la cadena
       };
     }
-    if (key === "delete") {
+    if (key === "delete" && target instanceof Map) {
       return (mapKey: PropertyKey) => {
         const hadKey = raw.has(mapKey);
         const result = raw.delete(mapKey);
@@ -88,20 +97,110 @@ const collectionHandlers: ProxyHandler<object> = {
         return result;
       };
     }
+    if (key === "keys" && target instanceof Map) {
+      return () => {
+        track(target, ITERATE_KEY); // Trackea la iteración de keys (reacciona a ADD/DELETE)
+        return target.keys(); // El iterador nativo se puede usar sobre el objeto crudo
+      };
+    }
+    if (key === "values" && target instanceof Map) {
+      return () => mapIterator(target, "values"); // Usa mapIterator para trackear además cada key durante la iteración
+    }
+    if (key === "entries" && target instanceof Map) {
+      return () => {
+        track(target, ITERATE_KEY); // Trackea la iteración de entries (reacciona a ADD/DELETE)
+        return target.entries(); // El iterador nativo se puede usar sobre el objeto crudo
+      };
+    }
+    if (key === Symbol.iterator && target instanceof Map) {
+      return () => mapIterator(target, "entries"); // for...of sobre un Map se comporta igual que entries()
+    }
+    if (key === "forEach" && target instanceof Map) {
+      return (
+        callback: (value: unknown, key: unknown, map: Map<unknown, unknown>) => void,
+      ) => {
+        track(target, ITERATE_KEY); // Trackea la iteración (reacciona a ADD/DELETE)
+        target.forEach((value, mapKey) => {
+          // Se pasa la key real del Map (antes se pasaba el value por error) y se trackea la key para reaccionar a SET
+          track(target, mapKey as PropertyKey);
+          callback(value, mapKey, receiver);
+        });
+      };
+    }
+    if (key === "add" && target instanceof Set) {
+      return (value: unknown) => {
+        const hadValue = target.has(value); // Verifica si el valor ya existe en el Set
+        if (!hadValue) {
+          target.add(value); // Agrega el valor al Set crudo
+          trigger(target, value as PropertyKey, "ADD", value); // Notifica a los efectos del valor y de la iteración
+        }
+        return receiver; // Set.prototype.add retorna el Set, se devuelve el proxy para mantener la cadena
+      };
+    }
+    if (key === "delete" && target instanceof Set) {
+      return (value: unknown) => {
+        const hadValue = target.has(value); // Verifica si el valor existía antes de eliminarlo
+
+        const result = target.delete(value); // Elimina el valor del Set crudo
+
+        if (hadValue) {
+          trigger(target, value as PropertyKey, "DELETE"); // Notifica a los efectos del valor y de la iteración
+        }
+
+        return result; // Set.prototype.delete retorna un booleano
+      };
+    }
+    if (key === "values" && target instanceof Set) {
+      return () => {
+        track(target, ITERATE_KEY); // Trackea la iteración (reacciona a ADD/DELETE)
+
+        return target.values(); // El iterador nativo se puede usar sobre el objeto crudo
+      };
+    }
+    if (key === "keys" && target instanceof Set) {
+      return () => {
+        track(target, ITERATE_KEY); // Trackea la iteración (reacciona a ADD/DELETE)
+
+        return target.keys(); // En un Set, keys() es igual a values()
+      };
+    }
     return Reflect.get(raw, key, receiver);
   },
 };
 
 export function reactive<T extends object>(target: T): T {
-  const existing = reactiveMap.get(target);
+  const existing = reactiveMap.get(target); // Si el objeto ya tiene un proxy reactivo, se reutiliza
   if (existing) {
     return existing;
   }
-  const handler = isMap(target) ? collectionHandlers : baseHandlers;
+  // Los Map y Set necesitan handlers especiales porque sus métodos internos no se pueden invocar con el proxy como receiver
+  const handler = isMap(target) || isSet(target) ? collectionHandlers : baseHandlers;
   const proxy = new Proxy(target, handler) as T;
-  reactiveMap.set(target, proxy);
+  reactiveMap.set(target, proxy); // Cachea el proxy asociado al objeto crudo
   return proxy;
 }
-function isMap(value: unknown): value is Map<unknown, unknown> {
+function isMap(value: unknown): value is Map<unknown, unknown> { // Type guard para identificar Maps
   return value instanceof Map;
+}
+function isSet(value: unknown): value is Set<unknown> { // Type guard para identificar Sets
+  return value instanceof Set;
+}
+
+function mapIterator( // Trackea cada key de manera individual durante la iteración
+  target: Map<unknown, unknown>,
+  kind: "keys" | "values" | "entries",
+) {
+  // Trackea la iteración: MAP_KEY_ITERATE_KEY para keys y ITERATE_KEY para values/entries (reaccionan a ADD/DELETE)
+  track(target, kind === "keys" ? MAP_KEY_ITERATE_KEY : ITERATE_KEY);
+
+  return (function* () { // Generador que recorre las entradas del Map crudo
+    for (const [mapKey, mapValue] of target.entries()) {
+      track(target, mapKey as PropertyKey); // Trackea cada key individual para que un SET dispare los efectos de iteración
+      yield kind === "keys" // Hace yield solo de lo que pide el kind
+        ? mapKey
+        : kind === "values"
+          ? mapValue
+          : [mapKey, mapValue];
+    }
+  })();
 }
