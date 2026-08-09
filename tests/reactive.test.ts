@@ -152,6 +152,50 @@ it("Deberia de prevenir la ejecución recursiva del efecto", () => {
     expect(state.count).toBe(1);
     expect(runs).toBe(1);
 });
+it("Deberia parar un efecto", () => {
+    const state = reactive({
+        count: 0
+    });
+
+    let dummy = 0;
+
+    const runner = effect(() => {
+        dummy = state.count;
+    });
+
+    expect(dummy).toBe(0);
+
+    state.count = 1;
+
+    expect(dummy).toBe(1);
+
+    runner.stop();
+
+    state.count = 2;
+
+    expect(dummy).toBe(1);
+});
+it("Deberia remover los efectos de cada dependencia", () => {
+    const state = reactive({
+        a: 1,
+        b: 2
+    });
+
+    let dummy = 0;
+
+    const runner = effect(() => {
+        dummy = state.a + state.b;
+    });
+
+    expect(dummy).toBe(3);
+
+    runner.stop();
+
+    state.a = 10;
+    state.b = 20;
+
+    expect(dummy).toBe(3);
+});
 });
 describe("computed", () => {
 
@@ -192,5 +236,68 @@ describe("computed", () => {
     expect(runs).toBe(1);
     expect(doubled.value).toBe(4);
     expect(runs).toBe(2);
+});
+it("Deberia de ser reactivo adentro de un effect", () => {
+    const state = reactive({
+        count: 1
+    });
+
+    const doubled = computed(() => state.count * 2);
+
+    let dummy = 0;
+
+    effect(() => {
+        dummy = doubled.value;
+    });
+
+    expect(dummy).toBe(2);
+
+    state.count = 5;
+
+    expect(dummy).toBe(10);
+});
+it("Debe recalcular cuando sea necesario", () => {
+    const state = reactive({
+        count: 1
+    });
+    let computedRuns = 0;
+    let effectRuns = 0;
+    const doubled = computed(() => {
+        computedRuns++;
+
+        return state.count * 2;
+    });
+    effect(() => {
+        effectRuns++;
+        doubled.value;
+    });
+    expect(computedRuns).toBe(1);
+    expect(effectRuns).toBe(1);
+    state.count = 2;
+    expect(computedRuns).toBe(2);
+    expect(effectRuns).toBe(2);
+});
+it("No deberia de notificar cuando está dirty", () => {
+    const state = reactive({
+        a: 1,
+        b: 2
+    });
+    let computedRuns = 0;
+    let effectRuns = 0;
+    const total = computed(() => {
+        computedRuns++;
+
+        return state.a + state.b;
+    });
+    effect(() => {
+        effectRuns++;
+        total.value;
+    });
+    expect(total.value).toBe(3);
+    state.a = 10;
+    state.b = 20;
+    expect(effectRuns).toBe(3);
+    expect(total.value).toBe(30);
+    expect(computedRuns).toBe(3);
 });
 });

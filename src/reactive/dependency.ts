@@ -1,4 +1,4 @@
-import { activeEffect, ReactiveEffect, type EffectFn } from './effect';
+import { activeEffect, ReactiveEffect } from './effect';
 const targetMap = new WeakMap<object, Map<PropertyKey, Set<ReactiveEffect>>>();
 export function track(target: object, key: PropertyKey) {
     if (!activeEffect) return; // Si no hay un efecto activo, no pasa nada
@@ -15,9 +15,7 @@ export function track(target: object, key: PropertyKey) {
         deps = new Set();
         depsMap.set(key, deps); // Crea un nuevo set de efectos para la propiedad si no existe
     }
-
-    deps.add(activeEffect); // Agrega el efecto activo al set de efectos para la propiedad (Esto era lo que faltaba ._.XD)
-    activeEffect.deps.push(deps); // Agrega el set de efectos al array de dependencias del efecto activo
+    trackEffect(deps); // Agrega el efecto activo al set de efectos para la propiedad
 }
 export function trigger(target: object, key: PropertyKey) {
     const depsMap = targetMap.get(target); // Map del objeto
@@ -27,12 +25,21 @@ export function trigger(target: object, key: PropertyKey) {
     const deps = depsMap.get(key); // Set de efectos para la propiedad
     
     if(!deps) return;
+    triggerEffect(deps);
+}
+export function trackEffect(deps: Set<ReactiveEffect>) {
+    if (!activeEffect) return; // Si no hay un efecto activo, no pasa nada
+    if(deps.has(activeEffect)) return;
+    deps.add(activeEffect); // Agrega el efecto activo al set de efectos para la propiedad (Esto era lo que faltaba ._.XD)
+    activeEffect.deps.push(deps); // Agrega el set de efectos al array de dependencias del efecto activo
+}
+export function triggerEffect(deps: Set<ReactiveEffect>) {
     const effects = new Set(deps);
     effects.forEach(effect => {
         if (effect.scheduler) { // Si el efecto tiene un scheduler, ejecuta el scheduler en lugar de ejecutar el efecto directamente
-        effect.scheduler();
-    } else {
-        effect.run(); // Ejecuta el efecto una vez
-    }
+            effect.scheduler();
+        } else {
+            effect.run(); // Ejecuta el efecto una vez
+        }
     });
 }
