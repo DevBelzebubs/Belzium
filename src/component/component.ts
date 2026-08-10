@@ -1,4 +1,5 @@
 import { createComponentProxy } from "./componentProxy";
+import { InjectionKey } from "./injection";
 
 export type EmitFn = (event: string, ...args: unknown[]) => void;
 export interface SetupContext {
@@ -15,6 +16,7 @@ export interface ComponentInstance {
   emit: EmitFn;
   parent: ComponentInstance | null;
   proxy: ComponentPublicInstance;
+  provides: Map<InjectionKey, unknown>;
 }
 
 export interface Component {
@@ -31,7 +33,18 @@ export function createComponentInstance(
   parent: ComponentInstance | null = null,
 ): ComponentInstance {
   // Crea una instancia de un componente
-  const instance = {type,props,setupState: {},emit: (() => {}) as EmitFn,parent,proxy: null as unknown as ComponentPublicInstance};
+  const provides = parent
+    ? Object.create(parent.provides)
+    : Object.create(null);
+  const instance = {
+    type,
+    props,
+    setupState: {},
+    emit: (() => {}) as EmitFn,
+    parent,
+    proxy: null as unknown as ComponentPublicInstance,
+    provides,
+  };
   instance.emit = createEmit(instance);
   instance.proxy = createComponentProxy(instance);
   return instance;
@@ -66,6 +79,25 @@ function createEmit(instance: ComponentInstance): EmitFn {
 export function getCurrentInstance() {
   //Instancia del componente
   return currentInstance;
+}
+export function provide<T>(key: InjectionKey<T>, value: T) {
+  const instance = getCurrentInstance();
+  if (!instance) {
+    return;
+  }
+  instance.provides[key] = value;
+}
+export function inject<T>(key: InjectionKey<T>,defaultValue?: T): T | undefined {
+    const instance =getCurrentInstance();
+    if (!instance) {
+        return defaultValue;
+    }
+
+    if (key in instance.provides) {
+        return instance.provides[key] as T;
+    }
+
+    return defaultValue;
 }
 function setCurrentInstance(instance: ComponentInstance | null) {
   // Setea la instancia actual

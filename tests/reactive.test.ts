@@ -5,7 +5,7 @@ import { computed } from '../src/reactive/computed';
 import { watch } from '../src/reactive/watch';
 import { ref, type Ref } from '../src/reactive/ref';
 import { toRaw } from '../src/reactive/reactiveContext';
-import { createComponentInstance, getCurrentInstance, setupComponent } from '../src/component/component';
+import { createComponentInstance, getCurrentInstance, inject, provide, setupComponent } from '../src/component/component';
 
 describe('reactive', () => {
     it('deberia de crear un objeto reactivo', () => { // Test 1
@@ -1177,6 +1177,144 @@ it("No deberia de desempaquetar valores normales", () => {
     expect(
         instance.proxy.count
     ).toBe(10);
+});
+it("Deberia proveer e injectar un valor", () => {
+
+    const service = {
+        name: "API"
+    };
+
+    let injected;
+
+    const App = {
+        setup() {
+            provide(
+                "api",
+                service
+            );
+            return {};
+        }
+    };
+
+    const Child = {
+        setup() {
+            injected =
+                inject("api");
+
+            return {};
+        }
+    };
+    const app =
+        createComponentInstance(App);
+
+    setupComponent(app);
+
+    const child =
+        createComponentInstance(
+            Child,
+            {},
+            app
+        );
+    setupComponent(child);
+    expect(injected)
+        .toBe(service);
+});
+it("Deberia poder sobreescribir proveedores padres de los proveedores hijos", () => {
+
+    const parentService = {
+        name: "parent"
+    };
+
+    const childService = {
+        name: "child"
+    };
+
+    let injected;
+
+    const App = {
+        setup() {
+            provide(
+                "service",
+                parentService
+            );
+
+            return {};
+        }
+    };
+
+    const Child = {
+        setup() {
+            provide(
+                "service",
+                childService
+            );
+
+            return {};
+        }
+    };
+
+    const GrandChild = {
+        setup() {
+            injected =
+                inject("service");
+
+            return {};
+        }
+    };
+
+    const app =
+        createComponentInstance(App);
+
+    setupComponent(app);
+
+    const child =
+        createComponentInstance(
+            Child,
+            {},
+            app
+        );
+
+    setupComponent(child);
+
+    const grandChild =
+        createComponentInstance(
+            GrandChild,
+            {},
+            child
+        );
+
+    setupComponent(grandChild);
+
+    expect(injected)
+        .toBe(childService);
+});
+it("Deberia usar el valor por defecto cuando no hay injección", () => {
+
+    const fallback = {
+        name: "fallback"
+    };
+
+    let injected;
+
+    const App = {
+        setup() {
+            injected =
+                inject(
+                    "missing",
+                    fallback
+                );
+
+            return {};
+        }
+    };
+
+    const instance =
+        createComponentInstance(App);
+
+    setupComponent(instance);
+
+    expect(injected)
+        .toBe(fallback);
 });
 });
 describe("computed", () => {
