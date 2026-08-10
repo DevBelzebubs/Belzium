@@ -116,4 +116,66 @@ it("Deberia dejar de mirar", () => {
     state.count = 2;
     expect(calls).toBe(1);
 });
+it("Deberia de hacer flush de manera sincrónica", () => {
+    const state = reactive({
+        count: 0
+    });
+    let calls = 0;
+
+    watch(
+        () => state.count,
+        () => {
+            calls++;
+        },
+        {
+            flush: "sync"
+        }
+    );
+
+    state.count++;
+    expect(calls).toBe(1);
+});
+it("Deberia de hacer flush de manera asíncrónica", async () => {
+    const state = reactive({
+        count: 0
+    });
+    let calls = 0;
+
+    watch(
+        () => state.count,
+        () => {
+            calls++;
+        },
+        {
+            flush: "pre"
+        }
+    );
+    state.count++;
+    expect(calls).toBe(0);
+    await Promise.resolve();
+    expect(calls).toBe(1);
+});
+it("Deberia deduplicar jobs en cola", async () => {
+    const state = reactive({
+        count: 0
+    });
+    let calls = 0;
+    watch(
+        () => state.count,
+        () => {
+            calls++;
+        },
+        {
+            flush: "pre"
+        }
+    );
+
+    state.count++;
+    state.count++;
+    state.count++;
+
+    expect(calls).toBe(0);
+    await Promise.resolve();
+    expect(calls).toBe(1);
+});
 });

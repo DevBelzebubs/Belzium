@@ -1,0 +1,426 @@
+import { describe, it, expect } from "vitest";
+import { ApplicationContext } from "../src/di/applicationContext";
+import { Scope } from "../src/di/scope";
+import { Service } from "../src/di/decorators";
+
+describe("ApplicationContext", () => {
+
+it("Deberia registrar y resolver una dependencia", () => {
+    const context = new ApplicationContext();
+
+    const service = {
+        name: "UserService"
+    };
+
+    context.register(
+        "userService",
+        service
+    );
+
+    expect(
+        context.resolve("userService")
+    ).toBe(service);
+});
+it("Deberia saber cuando un proveedor existe", () => {
+    const context = new ApplicationContext();
+
+    const service = {};
+
+    context.register(
+        "service",
+        service
+    );
+
+    expect(
+        context.has("service")
+    ).toBe(true);
+
+    expect(
+        context.has("missing")
+    ).toBe(false);
+});
+it("Deberia de usar clases como tokens de inyección", () => {
+    class UserService {}
+
+    const context =
+        new ApplicationContext();
+
+    const service =
+        new UserService();
+
+    context.register(
+        UserService,
+        service
+    );
+
+    expect(
+        context.resolve(UserService)
+    ).toBe(service);
+});
+it("Debe crearse singleton automáticamente", () => {
+    class UserService {}
+
+    const context =
+        new ApplicationContext();
+
+    context.registerProvider({
+        token: UserService,
+        useClass: UserService
+    });
+
+    const a =
+        context.resolve(UserService);
+
+    const b =
+        context.resolve(UserService);
+
+    expect(a).toBe(b);
+});
+it("Deberia resolver una dependencia de clases", () => {
+    class UserRepository {}
+    class UserService {
+        constructor(
+            public repository: UserRepository
+        ) {}
+    }
+
+    const context =
+        new ApplicationContext();
+
+    context.registerProvider({
+        token: UserRepository,
+        useClass: UserRepository
+    });
+
+    context.registerProvider({
+        token: UserService,
+        useClass: UserService,
+        dependencies: [
+            UserRepository
+        ]
+    });
+
+    const service =
+        context.resolve(UserService);
+
+    expect(service).toBeInstanceOf(
+        UserService
+    );
+
+    expect(service.repository)
+        .toBeInstanceOf(UserRepository);
+});
+it("Deberia resolver múltiples dependencias", () => {
+    class Logger {}
+
+    class UserRepository {}
+
+    class UserService {
+        constructor(
+            public repository: UserRepository,
+            public logger: Logger
+        ) {}
+    }
+
+    const context =
+        new ApplicationContext();
+
+    context.registerProvider({
+        token: Logger,
+        useClass: Logger
+    });
+
+    context.registerProvider({
+        token: UserRepository,
+        useClass: UserRepository
+    });
+
+    context.registerProvider({
+        token: UserService,
+        useClass: UserService,
+        dependencies: [
+            UserRepository,
+            Logger
+        ]
+    });
+
+    const service =
+        context.resolve(UserService);
+
+    expect(service.repository)
+        .toBeInstanceOf(UserRepository);
+
+    expect(service.logger)
+        .toBeInstanceOf(Logger);
+});
+it("Deberia rehusar dependencias como singletons", () => {
+    class UserRepository {}
+
+    class UserService {
+        constructor(
+            public repository: UserRepository
+        ) {}
+    }
+
+    const context =
+        new ApplicationContext();
+
+    context.registerProvider({
+        token: UserRepository,
+        useClass: UserRepository
+    });
+
+    context.registerProvider({
+        token: UserService,
+        useClass: UserService,
+        dependencies: [
+            UserRepository
+        ]
+    });
+
+    const first =
+        context.resolve(UserService);
+
+    const second =
+        context.resolve(UserService);
+
+    expect(first).toBe(second);
+
+    expect(first.repository)
+        .toBe(second.repository);
+});
+it("Deberia detectar dependencias circulares", () => {
+    class ServiceA {}
+
+    class ServiceB {}
+
+    const context =
+        new ApplicationContext();
+
+    context.registerProvider({
+        token: ServiceA,
+        useClass: ServiceA,
+        dependencies: [
+            ServiceB
+        ]
+    });
+
+    context.registerProvider({
+        token: ServiceB,
+        useClass: ServiceB,
+        dependencies: [
+            ServiceA
+        ]
+    });
+
+    expect(() =>
+        context.resolve(ServiceA)
+    ).toThrow(
+        "Circular dependency detected"
+    );
+});
+it("Deberia resolver proveedores singleton", () => {
+    class Service {}
+
+    const context =
+        new ApplicationContext();
+
+    context.registerProvider({
+        token: Service,
+        useClass: Service,
+        scope: Scope.SINGLETON
+    });
+
+    expect(
+        context.resolve(Service)
+    ).toBe(
+        context.resolve(Service)
+    );
+});
+it("Deberia crear instancias transient", () => {
+    class Service {}
+
+    const context =
+        new ApplicationContext();
+
+    context.registerProvider({
+        token: Service,
+        useClass: Service,
+        scope: Scope.TRANSIENT
+    });
+
+    const a =
+        context.resolve(Service);
+
+    const b =
+        context.resolve(Service);
+
+    expect(a).not.toBe(b);
+});
+it("Deberia crear una instancia scoped por context", () => {
+    class Service {}
+
+    const context =
+        new ApplicationContext();
+
+    context.registerProvider({
+        token: Service,
+        useClass: Service,
+        scope: Scope.SCOPED
+    });
+
+    const childA =
+        context.createScope();
+
+    const childB =
+        context.createScope();
+
+    const a1 =
+        childA.resolve(Service);
+
+    const a2 =
+        childA.resolve(Service);
+
+    const b =
+        childB.resolve(Service);
+
+    expect(a1).toBe(a2);
+    expect(a1).not.toBe(b);
+});
+it("Deberia compartir las instancias de singleton entre scopes", () => {
+    class Service {}
+
+    const context =
+        new ApplicationContext();
+
+    context.registerProvider({
+        token: Service,
+        useClass: Service
+    });
+
+    const child =
+        context.createScope();
+
+    expect(
+        context.resolve(Service)
+    ).toBe(
+        child.resolve(Service)
+    );
+});
+it("Deberia resolver dependencias scoped sin el scoped actual", () => {
+    class Repository {}
+
+    class Service {
+        constructor(
+            public repository: Repository
+        ) {}
+    }
+
+    const root =
+        new ApplicationContext();
+
+    root.registerProvider({
+        token: Repository,
+        useClass: Repository,
+        scope: Scope.SCOPED
+    });
+
+    root.registerProvider({
+        token: Service,
+        useClass: Service,
+        scope: Scope.SCOPED,
+        dependencies: [
+            Repository
+        ]
+    });
+
+    const childA =
+        root.createScope();
+
+    const childB =
+        root.createScope();
+
+    const serviceA =
+        childA.resolve(Service);
+
+    const serviceB =
+        childB.resolve(Service);
+
+    expect(
+        serviceA.repository
+    ).not.toBe(
+        serviceB.repository
+    );
+});
+it("Deberia rechazar una dependencia de singleton en un proveedor scoped", () => {
+
+    class RequestContext {}
+
+    class AuthService {
+        constructor(
+            public requestContext: RequestContext
+        ) {}
+    }
+
+    const context =
+        new ApplicationContext();
+
+    context.registerProvider({
+        token: RequestContext,
+        useClass: RequestContext,
+        scope: Scope.SCOPED
+    });
+
+    context.registerProvider({
+        token: AuthService,
+        useClass: AuthService,
+        dependencies: [
+            RequestContext
+        ],
+        scope: Scope.SINGLETON
+    });
+
+    expect(() =>
+        context.resolve(AuthService)
+    ).toThrow(
+        "SINGLETON provider cannot depend on SCOPED provider"
+    );
+});
+it("Deberia permitir un proveedor scoped en un singleton", () => {
+
+    class Database {}
+
+    class RequestService {
+        constructor(
+            public database: Database
+        ) {}
+    }
+
+    const context =
+        new ApplicationContext();
+
+    context.registerProvider({
+        token: Database,
+        useClass: Database,
+        scope: Scope.SINGLETON
+    });
+
+    context.registerProvider({
+        token: RequestService,
+        useClass: RequestService,
+        dependencies: [
+            Database
+        ],
+        scope: Scope.SCOPED
+    });
+
+    const child =
+        context.createScope();
+
+    const service =
+        child.resolve(RequestService);
+
+    expect(service.database)
+        .toBeInstanceOf(Database);
+});
+});
