@@ -1,9 +1,14 @@
 import { track, trigger, ITERATE_KEY, MAP_KEY_ITERATE_KEY } from "./dependency";
 import { setReactiveFactory, toReactive, rawMap } from "./reactiveContext";
 const reactiveMap = new WeakMap<object, any>(); // Cache de objetos crudos que ya fueron envueltos en un proxy reactivo (evita proxies duplicados)
+export const RAW = Symbol("raw");
 const baseHandlers: ProxyHandler<object> = {
   // Handlers para objetos y arrays (acceso a propiedades, índices y length)
   get(target, property, receiver) {
+    if (property === RAW) {
+      // Si se accede a la propiedad RAW, se retorna el objeto crudo correspondiente
+      return target;
+    }
     const value = Reflect.get(target, property, receiver); // Obtiene el valor de la propiedad
     track(target, property); // Llama a la función track para registrar la dependencia
     return toReactive(value); // Si el valor no es un objeto, lo convierte a reactivo (si es un objeto) o lo retorna tal cual
@@ -45,6 +50,9 @@ const baseHandlers: ProxyHandler<object> = {
 const collectionHandlers: ProxyHandler<object> = {
   // Handlers para Map y Set (los métodos internos no se pueden invocar con el proxy como receiver)
   get(target, key, receiver) {
+    if (key === RAW) {
+      return target;
+    }
     if (key === "size" && (target instanceof Map || target instanceof Set)) {
       track(target, ITERATE_KEY); // Trackea la iteración: size cambia al añadir/eliminar elementos
       return Reflect.get(target, "size", target); // Lee size sobre el objeto crudo porque el getter nativo no acepta el proxy como receiver

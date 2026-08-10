@@ -1,3 +1,5 @@
+import { RAW } from "./reactive";
+
 type ReactiveFactory = <T extends object>(target: T) => T;
 // Usamos el patrón factory para crear objetos reactivos
 let reactiveFactory: ReactiveFactory;
@@ -14,10 +16,11 @@ export function toReactive<T>(value: T): T {
   }
   return reactiveFactory(value as object) as T;
 }
-export function toRaw<T>(value: T): T { // Convierte un objeto reactivo a su objeto crudo correspondiente, de lo contrario retorna el valor tal cual
+export function toRaw<T>(value: T): T {
+  // Convierte un objeto reactivo a su objeto crudo correspondiente, de lo contrario retorna el valor tal cual
   if (typeof value !== "object" || value === null) {
     return value;
   }
 
-  return (rawMap.get(value as object) ?? value) as T;
+  return ((value as any)[RAW] ?? value) as T;
 }
