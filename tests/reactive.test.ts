@@ -6,6 +6,7 @@ import { watch } from '../src/reactive/watch';
 import { ref, type Ref } from '../src/reactive/ref';
 import { toRaw } from '../src/reactive/reactiveContext';
 import { createComponentInstance, getCurrentInstance, inject, provide, setupComponent } from '../src/component/component';
+import { ApplicationContext } from '../src/di/applicationContext';
 
 describe('reactive', () => {
     it('deberia de crear un objeto reactivo', () => { // Test 1
@@ -1178,7 +1179,7 @@ it("No deberia de desempaquetar valores normales", () => {
         instance.proxy.count
     ).toBe(10);
 });
-it("Deberia proveer e injectar un valor", () => {
+it("Deberia proveer e inya ectar un valor", () => {
 
     const service = {
         name: "API"
@@ -1288,7 +1289,7 @@ it("Deberia poder sobreescribir proveedores padres de los proveedores hijos", ()
     expect(injected)
         .toBe(childService);
 });
-it("Deberia usar el valor por defecto cuando no hay injección", () => {
+it("Deberia usar el valor por defecto cuando no hay inyección", () => {
 
     const fallback = {
         name: "fallback"
@@ -1315,6 +1316,220 @@ it("Deberia usar el valor por defecto cuando no hay injección", () => {
 
     expect(injected)
         .toBe(fallback);
+});
+it("Deberia registrar y resolver una dependencia", () => {
+    const context = new ApplicationContext();
+
+    const service = {
+        name: "UserService"
+    };
+
+    context.register(
+        "userService",
+        service
+    );
+
+    expect(
+        context.resolve("userService")
+    ).toBe(service);
+});
+it("Deberia saber cuando un proveedor existe", () => {
+    const context = new ApplicationContext();
+
+    const service = {};
+
+    context.register(
+        "service",
+        service
+    );
+
+    expect(
+        context.has("service")
+    ).toBe(true);
+
+    expect(
+        context.has("missing")
+    ).toBe(false);
+});
+it("Deberia de usar clases como tokens de inyección", () => {
+    class UserService {}
+
+    const context =
+        new ApplicationContext();
+
+    const service =
+        new UserService();
+
+    context.register(
+        UserService,
+        service
+    );
+
+    expect(
+        context.resolve(UserService)
+    ).toBe(service);
+});
+it("Debe crearse singleton automáticamente", () => {
+    class UserService {}
+
+    const context =
+        new ApplicationContext();
+
+    context.registerProvider({
+        token: UserService,
+        useClass: UserService
+    });
+
+    const a =
+        context.resolve(UserService);
+
+    const b =
+        context.resolve(UserService);
+
+    expect(a).toBe(b);
+});
+it("Deberia resolver una dependencia de clases", () => {
+    class UserRepository {}
+    class UserService {
+        constructor(
+            public repository: UserRepository
+        ) {}
+    }
+
+    const context =
+        new ApplicationContext();
+
+    context.registerProvider({
+        token: UserRepository,
+        useClass: UserRepository
+    });
+
+    context.registerProvider({
+        token: UserService,
+        useClass: UserService,
+        dependencies: [
+            UserRepository
+        ]
+    });
+
+    const service =
+        context.resolve(UserService);
+
+    expect(service).toBeInstanceOf(
+        UserService
+    );
+
+    expect(service.repository)
+        .toBeInstanceOf(UserRepository);
+});
+it("Deberia resolver múltiples dependencias", () => {
+    class Logger {}
+
+    class UserRepository {}
+
+    class UserService {
+        constructor(
+            public repository: UserRepository,
+            public logger: Logger
+        ) {}
+    }
+
+    const context =
+        new ApplicationContext();
+
+    context.registerProvider({
+        token: Logger,
+        useClass: Logger
+    });
+
+    context.registerProvider({
+        token: UserRepository,
+        useClass: UserRepository
+    });
+
+    context.registerProvider({
+        token: UserService,
+        useClass: UserService,
+        dependencies: [
+            UserRepository,
+            Logger
+        ]
+    });
+
+    const service =
+        context.resolve(UserService);
+
+    expect(service.repository)
+        .toBeInstanceOf(UserRepository);
+
+    expect(service.logger)
+        .toBeInstanceOf(Logger);
+});
+it("Deberia rehusar dependencias como singletons", () => {
+    class UserRepository {}
+
+    class UserService {
+        constructor(
+            public repository: UserRepository
+        ) {}
+    }
+
+    const context =
+        new ApplicationContext();
+
+    context.registerProvider({
+        token: UserRepository,
+        useClass: UserRepository
+    });
+
+    context.registerProvider({
+        token: UserService,
+        useClass: UserService,
+        dependencies: [
+            UserRepository
+        ]
+    });
+
+    const first =
+        context.resolve(UserService);
+
+    const second =
+        context.resolve(UserService);
+
+    expect(first).toBe(second);
+
+    expect(first.repository)
+        .toBe(second.repository);
+});
+it("Deberia detectar dependencias circulares", () => {
+    class ServiceA {}
+
+    class ServiceB {}
+
+    const context =
+        new ApplicationContext();
+
+    context.registerProvider({
+        token: ServiceA,
+        useClass: ServiceA,
+        dependencies: [
+            ServiceB
+        ]
+    });
+
+    context.registerProvider({
+        token: ServiceB,
+        useClass: ServiceB,
+        dependencies: [
+            ServiceA
+        ]
+    });
+
+    expect(() =>
+        context.resolve(ServiceA)
+    ).toThrow(
+        "Circular dependency detected"
+    );
 });
 });
 describe("computed", () => {

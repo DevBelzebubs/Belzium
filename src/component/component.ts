@@ -1,5 +1,5 @@
 import { createComponentProxy } from "./componentProxy";
-import { InjectionKey } from "./injection";
+import type { InjectionKey, Provides } from "./injection";
 
 export type EmitFn = (event: string, ...args: unknown[]) => void;
 export interface SetupContext {
@@ -16,7 +16,7 @@ export interface ComponentInstance {
   emit: EmitFn;
   parent: ComponentInstance | null;
   proxy: ComponentPublicInstance;
-  provides: Map<InjectionKey, unknown>;
+  provides: Provides; // Valores proporcionados al componente, heredados del padre por cadena de prototipos
 }
 
 export interface Component {
@@ -81,14 +81,16 @@ export function getCurrentInstance() {
   return currentInstance;
 }
 export function provide<T>(key: InjectionKey<T>, value: T) {
+  // Proporciona un valor a los componentes descendientes
   const instance = getCurrentInstance();
   if (!instance) {
     return;
   }
   instance.provides[key] = value;
 }
-export function inject<T>(key: InjectionKey<T>,defaultValue?: T): T | undefined {
-    const instance =getCurrentInstance();
+export function inject<T>(key: InjectionKey<T>, defaultValue?: T): T | undefined {
+    // Inyecta un valor proporcionado por un componente ancestro, o el valor por defecto si no existe
+    const instance = getCurrentInstance();
     if (!instance) {
         return defaultValue;
     }

@@ -1,0 +1,2 @@
+// Token de inyección: identifica un provider dentro del ApplicationContext (string, symbol o clase constructora)
+export type InjectionToken<T = unknown> = string | symbol | (new (...args: any[]) => T);
