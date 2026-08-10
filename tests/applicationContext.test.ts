@@ -423,4 +423,70 @@ it("Deberia permitir un proveedor scoped en un singleton", () => {
     expect(service.database)
         .toBeInstanceOf(Database);
 });
+it("Deberia resolver un provider factory", () => {
+    const API_URL =
+        Symbol("API_URL");
+
+    const context =
+        new ApplicationContext();
+    context.register(
+        API_URL,
+        "https://api.example.com"
+    );
+    const API_CLIENT =
+        Symbol("API_CLIENT");
+    context.registerProvider({
+        token: API_CLIENT,
+        useFactory: (
+            url: string
+        ) => ({
+            url
+        }),
+        dependencies: [
+            API_URL
+        ]
+    });
+    const client =
+        context.resolve<{
+            url: string
+        }>(
+            API_CLIENT
+        );
+    expect(client.url)
+        .toBe(
+            "https://api.example.com"
+        );
+});
+it("Deberia cachear los factorys de providers singleton", () => {
+    const TOKEN =
+        Symbol("TOKEN");
+
+    let executions = 0;
+    const context =
+        new ApplicationContext();
+
+    context.registerProvider({
+        token: TOKEN,
+        useFactory: () => {
+
+            executions++;
+
+            return {
+                id: executions
+            };
+        },
+        scope: Scope.SINGLETON
+    });
+
+    const first =
+        context.resolve(TOKEN);
+
+    const second =
+        context.resolve(TOKEN);
+
+    expect(first)
+        .toBe(second);
+    expect(executions)
+        .toBe(1);
+});
 });
