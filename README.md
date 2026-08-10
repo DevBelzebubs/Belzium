@@ -1,4 +1,4 @@
-# Belzium
+# Belzium (Fase Pre-Alfa temprana)
 
 Framework de frontend minimalista en TypeScript: **reactividad**, **componentes** y **DI** (inversión de control), sin dependencias de runtime.
 
