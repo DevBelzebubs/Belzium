@@ -6,7 +6,7 @@ import {
 import { Application, createApplication } from "../src/core/application";
 import { Service } from "../src/di/decorators";
 import { ApplicationContext } from "../src/di/applicationContext";
-import { Bean, Component, Configuration, createApp } from "../src";
+import { Bean, Component, Configuration, createApp, ref } from "../src";
 import { createToken } from "../src/di/token";
 import { Scope } from "../src/di/scope";
 import { h, text } from "../src/runtime/vnode";
@@ -766,5 +766,129 @@ describe("createApp", () => {
         expect(element?.innerHTML)
             .toBe("");
     });
+it("detiene el efecto reactivo al desmontar", () => {
 
+    document.body.innerHTML =
+        `<div id="app"></div>`;
+
+    @Component()
+    class App {
+
+        count = ref(0);
+
+        render() {
+            return h(
+                "div",
+                null,
+                [
+                    text(
+                        String(this.count.value)
+                    ),
+                ],
+            );
+        }
+    }
+
+    const app =
+        createApp(App);
+
+    app.mount("#app");
+
+    const element =
+        document.querySelector("#app");
+
+    expect(element?.textContent)
+        .toBe("0");
+
+    app.unmount();
+
+    expect(element?.innerHTML)
+        .toBe("");
+});
+it("detiene la reactividad del componente al desmontar", () => {
+
+    document.body.innerHTML =
+        `<div id="app"></div>`;
+
+    let renderCount = 0;
+
+    @Component()
+    class App {
+
+        count = ref(0);
+
+        render() {
+
+            renderCount++;
+
+            return h(
+                "div",
+                null,
+                [
+                    text(
+                        String(
+                            this.count.value
+                        )
+                    ),
+                ],
+            );
+        }
+    }
+
+    const app =
+        createApp(App);
+
+    app.mount("#app");
+
+    // El render inicial debe ejecutarse
+    // exactamente una vez.
+    expect(renderCount)
+        .toBe(1);
+
+
+    // Recuperamos la instancia creada
+    // por el ApplicationContext.
+    const instance =
+        app.context.resolve(App);
+
+
+    // El componente está montado,
+    // por lo que cambiar el Ref
+    // debe provocar otro render.
+    instance.count.value = 1;
+
+    expect(renderCount)
+        .toBe(2);
+
+
+    const element =
+        document.querySelector("#app");
+
+    expect(element?.textContent)
+        .toBe("1");
+
+
+    // Desmontamos la aplicación.
+    app.unmount();
+
+
+    // Guardamos el número de renders
+    // después del desmontaje.
+    const rendersAfterUnmount =
+        renderCount;
+
+
+    // Cambiar el estado después de unmount
+    // NO debe volver a ejecutar render().
+    instance.count.value = 2;
+
+
+    expect(renderCount)
+        .toBe(rendersAfterUnmount);
+
+
+    // El DOM debe permanecer desmontado.
+    expect(element?.innerHTML)
+        .toBe("");
+});
 });

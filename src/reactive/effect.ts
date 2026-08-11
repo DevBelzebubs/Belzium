@@ -15,7 +15,10 @@ export class ReactiveEffect<T = any> {
     public deps: Set<ReactiveEffect>[] = [];
     constructor(
         public fn: EffectFn, public scheduler?: EffectScheduler, public onStop?: () => void
-    ) {}
+    ) {
+        // Registra automáticamente el efecto en el scope activo.
+        activeEffectScope?.add(this);
+    }
     run() : T | undefined { // Ejecuta el efecto y trackea las dependencias
         if(!this.active) { // Si el efecto no está activo, simplemente ejecuta la función sin trackear dependencias
             return this.fn();
@@ -55,6 +58,25 @@ export class ReactiveEffect<T = any> {
     }
 }
 export let activeEffect: ReactiveEffect | null = null;
+
+// Scope reactivo actualmente activo.
+// Los efectos creados mientras un scope está activo
+// se registran automáticamente en él.
+export interface EffectScopeLike {
+  add(effect: ReactiveEffect): void;
+}
+
+let activeEffectScope: EffectScopeLike | undefined;
+
+// Establece el scope activo durante la ejecución de run().
+export function setActiveEffectScope(scope: EffectScopeLike | undefined): void {
+  activeEffectScope = scope;
+}
+
+// Obtiene el scope activo actualmente.
+export function getActiveEffectScope(): EffectScopeLike | undefined {
+  return activeEffectScope;
+}
 
 export function effect(fn:EffectFn, options: EffectOptions = {}) {
     const reactiveEffect = new ReactiveEffect(fn, options.scheduler, options.onStop); // Crea una nueva instancia de ReactiveEffect con la función proporcionada

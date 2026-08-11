@@ -29,21 +29,17 @@ export function createApp(rootComponent: Constructor): BelziumApplication {
 
   // Registra el componente raíz como provider
   // para que el contexto pueda resolverlo.
-  context.registerProvider({
-    token: rootComponent,
-    useClass: rootComponent,
-  });
+  context.registerProvider({ token: rootComponent, useClass: rootComponent });
 
   // Renderer encargado de montar
   // componentes dentro del DOM.
   const renderer = new ComponentRenderer(context);
 
-  // Elemento donde se encuentra montada
-  // actualmente la aplicación.
+  // Elemento donde está montada la aplicación.
   let mountedElement: Element | null = null;
 
-  // Instancia del componente raíz.
-  let rootInstance: InstanceType<Constructor> | null = null;
+  // Información del componente raíz montado.
+  let mountedComponent: ReturnType<ComponentRenderer["mount"]> | null = null;
 
   return {
     // El contexto pertenece a la aplicación.
@@ -55,46 +51,38 @@ export function createApp(rootComponent: Constructor): BelziumApplication {
       // o un Element directamente.
       const element =
         typeof target === "string" ? document.querySelector(target) : target;
-
       // El target debe existir.
-      if (!element) {
-        throw new Error(`Mount target not found`);
-      }
+      if (!element) throw new Error(`Mount target not found`);
 
       // Evita montar dos veces
       // la misma aplicación.
-      if (mountedElement) {
-        throw new Error(`Application is already mounted`);
-      }
+      if (mountedElement) throw new Error(`Application is already mounted`);
 
       // El componente raíz se resuelve
       // mediante el ApplicationContext.
       const instance = context.resolve(rootComponent);
-
-      // Monta el componente utilizando
-      // el renderer existente.
-      renderer.mount(rootComponent, instance, element);
+      const mounted = renderer.mount(rootComponent, instance, element);
 
       // Guarda el elemento montado.
       mountedElement = element;
 
-      // Guarda la instancia raíz.
-      rootInstance = instance;
+      // Guarda la información del componente montado.
+      mountedComponent = mounted;
     },
 
     // Desmonta la aplicación.
     unmount() {
       // Si no está montada,
       // no hay nada que desmontar.
-      if (!mountedElement) {
-        return;
-      }
+      if (!mountedElement || !mountedComponent) return;
+
       // Por ahora limpiamos el DOM.
+      mountedComponent.dispose();
       mountedElement.innerHTML = "";
 
       // Libera las referencias.
       mountedElement = null;
-      rootInstance = null;
+      mountedComponent = null;
     },
   };
 }
