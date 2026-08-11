@@ -1,45 +1,56 @@
-// API pública del framework: re-exporta la reactividad y los componentes
-// Reactividad: proxies reactivos y el symbol RAW para acceder al objeto crudo
-export {
-    reactive,
-    RAW
-} from "./reactive/reactive";
+// API pública de Belzium.
+// Este archivo define las funcionalidades que una aplicación
+// puede consumir directamente.
 
-// Contexto reactivo: convierte valores a reactivos y recupera el objeto crudo
-export {
-    toReactive,
-    toRaw
-} from "./reactive/reactiveContext";
+// ============================================================
+// PULSES — REACTIVIDAD
+// ============================================================
 
-// Efectos: funciones que reaccionan a los cambios del estado reactivo
-export {
-    effect,
-    ReactiveEffect
-} from "./reactive/effect";
+// Reactividad mediante Proxy.
+export { reactive } from "./reactive/reactive";
 
-// Computed: valores derivados que se recalculan cuando cambian sus dependencias
-export { computed, ComputedRef } from "./reactive/computed";
+// Conversión entre objetos reactivos y valores originales.
+export { toReactive, toRaw } from "./reactive/reactiveContext";
 
-// Ref: variables reactivas individuales
-export { ref, RefImpl, isRef, IS_REF } from "./reactive/ref";
+// Efectos reactivos.
+export { effect } from "./reactive/effect";
+
+// Valores derivados.
+export { computed } from "./reactive/computed";
+
+// Variables reactivas individuales.
+export { ref, isRef } from "./reactive/ref";
+
 export type { Ref } from "./reactive/ref";
 
-// Watch: observa fuentes reactivas y ejecuta callbacks cuando cambian
+// Observación de estado reactivo.
 export { watch, watchEffect } from "./reactive/watch";
 
-// Componentes: decorador, creación de instancias, setup y acceso a la instancia actual
-export { createComponentInstance, setupComponent, getCurrentInstance, Component } from "./component/component";
-export type {
-    ComponentInstance,
-    ComponentPublicInstance,
-    SetupContext,
-    EmitFn
+// ============================================================
+// COMPONENTES
+// ============================================================
+
+// API principal para declarar componentes.
+export {
+  Component,
+  createComponentInstance,
+  setupComponent,
+  getCurrentInstance,
 } from "./component/component";
 
-// Componentes: proxy público de la instancia
-export {
-    createComponentProxy
-} from "./component/componentProxy";
+export type {
+  ComponentInstance,
+  ComponentPublicInstance,
+  SetupContext,
+  EmitFn,
+} from "./component/component";
 
-// DI: clases de configuración y beans (@Configuration / @Bean)
-export { Configuration, Bean } from "./di/decorators/index"
+// Proxy público de una instancia.
+export { createComponentProxy } from "./component/componentProxy";
+
+// ============================================================
+// DEPENDENCY INJECTION
+// ============================================================
+
+// Configuración declarativa del IoC.
+export { Configuration, Bean } from "./di/decorators/index";

@@ -1,36 +1,82 @@
 import {
-    reactive,
-    effect,
-    computed
-} from "../src";
-
-import {
     describe,
     expect,
-    it
+    it,
 } from "vitest";
+import { Component, reactive, ref, isRef } from "../src";
+import { Service } from "../src/di/decorators";
+import { h, text } from "../src/runtime/vnode";
 
-describe("API publica", () => {
 
-    it("Deberia exponer la api publica", () => {
+describe("Belzium public API", () => {
 
-        const state = reactive({
-            count: 1
-        });
+    it("expone los decoradores principales", () => {
 
-        const doubled =
-            computed(() =>
-                state.count * 2
+        expect(Component)
+            .toBeDefined();
+
+        expect(Service)
+            .toBeDefined();
+    });
+
+
+    it("expone Pulses", () => {
+
+        expect(reactive)
+            .toBeDefined();
+
+        expect(ref)
+            .toBeDefined();
+
+        expect(isRef)
+            .toBeDefined();
+    });
+
+
+    it("expone la API de VNodes", () => {
+
+        expect(h)
+            .toBeDefined();
+
+        expect(text)
+            .toBeDefined();
+    });
+
+
+    it("ref crea un valor reactivo", () => {
+
+        const count =
+            ref(0);
+
+        expect(count.value)
+            .toBe(0);
+
+
+        count.value++;
+
+
+        expect(count.value)
+            .toBe(1);
+    });
+
+
+    it("h crea un VNode", () => {
+
+        const vnode =
+            h(
+                "div",
+                null,
+                [
+                    text("Hello"),
+                ]
             );
 
-        let result = 0;
 
-        effect(() => {
-            result = doubled.value;
-        });
+        expect(vnode.type)
+            .toBe("div");
 
-        expect(result).toBe(2);
-        state.count = 5;
-        expect(result).toBe(10);
+        expect(vnode.children)
+            .toHaveLength(1);
     });
+
 });

@@ -12,7 +12,11 @@ import {
   type VNode,
   type VNodeKey,
 } from "./vnode";
-
+import { ComponentProps, createProps, updateProps } from "../component/props";
+const componentProps = new WeakMap<
+  RenderableComponent,
+  ComponentProps<Record<string, unknown>>
+>();
 // Determina si un VNode representa un componente
 function isComponentVNode(vnode: VNode): boolean {
   return typeof vnode.type === "function";
@@ -377,6 +381,7 @@ function patchKeyedChildren(
 }
 
 // Monta un componente representado por un VNode
+// Monta un componente representado por un VNode
 export function mountComponent(
   vnode: VNode,
   container: Node,
@@ -389,15 +394,29 @@ export function mountComponent(
   // Resuelve la instancia mediante el IoC
   const instance = context.resolve(Component);
 
+  // Crea las props reactivas del componente.
+  // El componente recibirá únicamente la vista
+  // de solo lectura.
+  const props = createProps((vnode.props ?? {}) as Record<string, unknown>);
+
+  // Asigna las props públicas a la instancia
+  instance.props = props.readonly;
+  componentProps.set(instance, props);
   // Estado interno del componente
   // que será conservado durante su vida
   const componentState = {
+    // Instancia resuelta mediante IoC
     instance,
+    // Props internas que pueden ser actualizadas
+    // por el renderer.
+    props,
+    // Árbol virtual generado por el componente
     subTree: null as VNode | null,
+    // Nodo raíz real del componente
     element: null as Node | null,
+    // Efecto Pulse del componente
     effect: undefined as ReturnType<typeof effect> | undefined,
   };
-
   // Ejecuta el render dentro de Pulse.
   // Las dependencias utilizadas durante
   // render() quedan asociadas al componente.
@@ -405,18 +424,44 @@ export function mountComponent(
     // Genera el nuevo árbol virtual
     const nextVNode = instance.render();
 
-    // El primer render no tiene
-    // un árbol anterior
+    // Primer render del componente
     if (!componentState.subTree) {
       const node = createElement(nextVNode, context);
 
+      // Inserta el nodo en el contenedor real
       container.insertBefore(node, container.childNodes[index] ?? null);
 
+      // Guarda el nodo raíz
       componentState.element = node;
     } else {
-      // Los renders posteriores
-      // utilizan el diff normal
-      patch(componentState.subTree, nextVNode, container, index, context);
+      // Obtiene el nodo padre real
+      // donde actualmente vive el componente
+      const parent = componentState.element?.parentNode;
+
+      if (!parent) {
+        return;
+      }
+
+      // Busca la posición actual del componente
+      // dentro de su contenedor real
+      const currentIndex = Array.prototype.indexOf.call(
+        parent.childNodes,
+        componentState.element,
+      );
+
+      // Actualiza el árbol virtual
+      const patchedNode = patch(
+        componentState.subTree,
+        nextVNode,
+        parent,
+        currentIndex,
+        context,
+      );
+
+      // El nodo raíz puede haber sido reemplazado
+      if (patchedNode) {
+        componentState.element = patchedNode;
+      }
     }
 
     // Guarda el árbol generado
@@ -449,6 +494,7 @@ export function mountComponent(
 }
 
 // Actualiza un componente que ya está montado
+// Actualiza un componente que ya está montado
 function updateComponent(
   oldVNode: VNode,
   newVNode: VNode,
@@ -456,8 +502,7 @@ function updateComponent(
   index: number,
   context?: ApplicationContext,
 ): Node | null {
-  // El componente debe disponer
-  // de su ApplicationContext
+  // El componente necesita el ApplicationContext
   if (!context) {
     throw new Error(`ApplicationContext is required to update a component`);
   }
@@ -466,22 +511,35 @@ function updateComponent(
   // del componente anterior
   const component = oldVNode.component;
 
-  // Si por alguna razón no existe estado,
-  // se monta nuevamente
+  // Si no existe estado,
+  // el componente debe montarse nuevamente
   if (!component) {
     return mountComponent(newVNode, container, context, index);
   }
 
-  // Reutiliza la misma instancia
+  // Conserva el estado en el VNode nuevo
+  // para que el renderer pueda reutilizar
+  // la misma instancia en futuros patches.
   newVNode.component = component;
 
-  // Por ahora el componente conserva
-  // su propio Pulse effect.
+  const props = componentProps.get(component.instance);
+
+  if (!props) {
+    throw new Error(`Component props state not found`);
+  }
+
+  // Actualiza las props manteniendo
+  // la identidad del objeto reactivo.
   //
-  // Los cambios de estado interno
-  // dispararán directamente ese effect.
-  //
-  // En este punto solo sincronizamos
-  // el subTree almacenado.
-  return container.childNodes[index] ?? null;
+  // NO reemplazamos instance.props.
+  // El componente conserva el mismo Proxy.
+  updateProps(
+    props.target,
+    (newVNode.props ?? {}) as Record<string, unknown>,
+  );
+
+  // El Pulse del componente detectará
+  // los cambios de las props cuando estas
+  // sean utilizadas durante render().
+  return component.element ?? container.childNodes[index] ?? null;
 }
