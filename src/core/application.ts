@@ -12,12 +12,14 @@ import {
 
 import { getMetadata } from "../di/metadata";
 
+import type { Provider } from "../di/provider";
+
 import type {
     InjectionToken
 } from "../di/token";
 // Clases que serán registradas automáticamente como componente
 export interface ApplicationOptions {
-    providers?: Array<new (...args: any[]) => any>;
+    providers?: Array<(new (...args: any[]) => any) | Provider>;
 }
 export class Application {
     // Contenedor de dependencias de la app.
@@ -25,10 +27,14 @@ export class Application {
     constructor(options: ApplicationOptions = {}) {
         this.context = new ApplicationContext();
         for (const provider of options.providers ?? []) {
-            if (getMetadata(CONFIGURATION_METADATA, provider)) {
-                new ConfigurationProcessor().process(new provider(), this.context);
+            if (typeof provider === "function") {
+                if (getMetadata(CONFIGURATION_METADATA, provider)) {
+                    new ConfigurationProcessor().process(new provider(), this.context);
+                } else {
+                    this.context.registerComponent(provider);
+                }
             } else {
-                this.context.registerComponent(provider);
+                this.context.registerProvider(provider);
             }
         }
     }

@@ -790,4 +790,31 @@ it("Deberia rechazar clases sin @Configuración", () => {
         /not marked with @Configuration/i
     );
 });
+it("Deberia resolver tokens tipados", () => {
+
+    const API_URL =
+        createToken<string>(
+            "API_URL"
+        );
+
+
+    const context =
+        new ApplicationContext();
+
+
+    context.register(
+        API_URL,
+        "https://api.example.com"
+    );
+
+
+    const result =
+        context.resolve(API_URL);
+
+
+    expect(result)
+        .toBe(
+            "https://api.example.com"
+        );
+});
 });

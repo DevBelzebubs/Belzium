@@ -3,7 +3,7 @@ import {
     expect,
     it
 } from "vitest";
-import { createToken } from "../src/di/token";
+import { createToken, InjectionToken } from "../src/di/token";
 import { ApplicationContext } from "../src/di/applicationContext";
 import { Service } from "../src/di/decorators";
 
@@ -304,4 +304,25 @@ it("Deberia resolver un token abstracto a través de un factory", () => {
     expect(typeof logger.log)
         .toBe("function");
 });
+it("Deberia crear tokens tipados", () => {
+
+        const API_URL =
+            createToken<string>(
+                "API_URL"
+            );
+
+
+        expect(
+            API_URL
+        ).toBeInstanceOf(
+            InjectionToken
+        );
+
+
+        expect(
+            API_URL.description
+        ).toBe(
+            "API_URL"
+        );
+    });
 });

@@ -1,7 +1,7 @@
 import { componentToProvider } from "./metadata";
 import { Provider } from "./provider";
 import { Scope } from "./scope";
-import { Token, type InjectionToken } from "./token";
+import { InjectionToken } from "./token";
 import {
     ConfigurationProcessor
 } from "./configurationProcessor";
@@ -297,7 +297,7 @@ export class ApplicationContext {
   }
   // Convierte un token a un nombre legible para los mensajes de error.
   private describeToken(token: InjectionToken): string {
-    if (token instanceof Token) return token.description;
+    if (token instanceof InjectionToken) return token.description;
     
     if (typeof token === "function") return token.name;
     return String(token);

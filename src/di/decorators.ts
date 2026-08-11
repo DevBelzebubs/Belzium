@@ -5,8 +5,9 @@ import {
 
 import { Scope } from "./scope";
 import { InjectionToken } from "./token";
-// Opciones de @Service: ciclo de vida y dependencias a inyectar.
+// Opciones de @Service: token custom, ciclo de vida y dependencias a inyectar.
 export interface ServiceOptions {
+    token?: InjectionToken;
     scope?: Scope;
     dependencies?: InjectionToken[];
 }
@@ -15,7 +16,9 @@ export interface ServiceOptions {
 export function Service(options?: ServiceOptions) {
     return function <T extends new (...args: any[]) => any>(target: T): T {
         defineComponentMetadata(target,{
-                token: target,
+                token:
+                    options?.token ??
+                    target,
                 type: ComponentType.SERVICE,
                 scope:
                     options?.scope ??
