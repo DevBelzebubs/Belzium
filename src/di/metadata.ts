@@ -1,5 +1,6 @@
 import { Scope } from "./scope";
 import { InjectionToken } from "./token";
+type MetadataKey = symbol;
 // Tipos de componentes que pueden ser descubiertos
 export enum ComponentType {
     SERVICE = "service",
@@ -14,6 +15,7 @@ export interface ComponentMetadata<T = unknown> {
     scope: Scope;
     dependencies?: InjectionToken[];
 }
+const metadataStore =new WeakMap<object, Map<MetadataKey, unknown>>();
 // Registro global de metadata
 const componentMetadata = new WeakMap<Function, ComponentMetadata>();
 export function defineComponentMetadata<T>(target: new (...args: any[]) => T,metadata: ComponentMetadata<T>): void {
@@ -33,6 +35,15 @@ export function componentToProvider<T>(target: new (...args: any[]) => T): Provi
         dependencies: metadata.dependencies,
         scope: metadata.scope
     };
+}
+export function defineMetadata<T>(key: MetadataKey,value: T,target: object): void{
+    let metadata = metadataStore.get(target);
+    if (!metadata) metadata = new Map<MetadataKey, unknown>();
+    metadataStore.set(target,metadata);
+    metadata.set(key,value);
+}
+export function getMetadata<T>(key: MetadataKey,target: object): T | undefined {
+    return metadataStore.get(target)?.get(key) as T | undefined;
 }
 
 

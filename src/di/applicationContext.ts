@@ -1,7 +1,7 @@
 import { componentToProvider } from "./metadata";
-import { ClassProvider, FactoryProvider, Provider } from "./provider";
+import { Provider } from "./provider";
 import { Scope } from "./scope";
-import type { InjectionToken } from "./token";
+import { Token, type InjectionToken } from "./token";
 
 export class ApplicationContext {
   // =========================================================
@@ -132,27 +132,20 @@ export class ApplicationContext {
   // ValueProvider también se considera SINGLETON, representa un valor ya creado
   private getScope(token: InjectionToken): Scope {
     const provider = this.findProvider(token);
-    if (!provider) {
-      throw new Error(`No provider found for token`);
-    }
-
+    if (!provider) 
+      throw new Error(`No provider found for token "${this.describeToken(token)}"`);
     if ("useValue" in provider) {
       return Scope.SINGLETON;
     }
 
     return provider.scope ?? Scope.SINGLETON;
   }
-  private validateDependencyScope(
-    ownerToken: InjectionToken,
-    ownerScope: Scope,
-    dependencyToken: InjectionToken,
-  ): void {
+  // Evita que un SINGLETON dependa de un SCOPED:
+  // el singleton vive en el root y el scoped en un contexto hijo.
+  private validateDependencyScope(ownerToken: InjectionToken,ownerScope: Scope,dependencyToken: InjectionToken,): void {
     const dependencyScope = this.getScope(dependencyToken);
     if (ownerScope === Scope.SINGLETON && dependencyScope === Scope.SCOPED) {
-      throw new Error(
-        `Invalid dependency scope: ` +
-          `SINGLETON provider cannot depend on SCOPED provider`,
-      );
+        throw new Error(`Invalid dependency scope: ` +`SINGLETON provider cannot depend on SCOPED provider`,);
     }
   }
   // =========================================================
@@ -188,7 +181,7 @@ export class ApplicationContext {
   resolve<T>(token: InjectionToken<T>): T {
     // Buscar el provider
     const provider = this.findProvider(token);
-    if (!provider) throw new Error(`No provider found for token`);
+    if (!provider) throw new Error(`No provider found for token "${this.describeToken(token)}"`);
     // Los valores ya están creados.
     if ("useValue" in provider) return provider.useValue as T;
     const scope = this.getScope(token);
@@ -215,6 +208,7 @@ export class ApplicationContext {
     }
     this.resolving.add(token);
     try {
+      this.validateScopeGraph(token);
       const dependencies = provider.dependencies ?? [];
       for (const dependency of dependencies) {
         this.validateDependencyScope(token, scope, dependency);
@@ -266,8 +260,11 @@ export class ApplicationContext {
   // )
   private createInstance<T>(
     token: InjectionToken<T>,
-    provider: ClassProvider<T> | FactoryProvider<T>,
+    provider: Provider<T>,
   ): T {
+    if ("useValue" in provider) {
+        return provider.useValue;
+    }
     const dependencies = provider.dependencies ?? [];
     // Resolver recursivamente cada dependencia.
     const resolvedDependencies = dependencies.map((dependency) => this.resolve(dependency));
@@ -285,13 +282,61 @@ export class ApplicationContext {
     if (this.providers.has(token)) return true;
     return this.parent?.has(token) ?? false;
   }
+  // Registra un componente decorado con @Service convirtiendo su metadata en provider.
   registerComponent<T>(target: new (...args: any[]) => T): void {
     const provider = componentToProvider(target);
     this.registerProvider(provider);
   }
+  // Registra varios componentes de una sola vez.
   registerComponents(components: Array<new (...args: any[]) => any>): void {
     for (const component of components) {
       this.registerComponent(component);
     }
+  }
+  // Convierte un token a un nombre legible para los mensajes de error.
+  private describeToken(token: InjectionToken): string {
+    if (token instanceof Token) return token.description;
+    
+    if (typeof token === "function") return token.name;
+    return String(token);
+  }
+  // Valida en registro que un SINGLETON no dependa de un SCOPED.
+  private validateDependencies(provider: Provider): void {
+    const scope = "scope" in provider ? provider.scope ?? Scope.SINGLETON : Scope.SINGLETON;
+    if (scope !== Scope.SINGLETON) return;
+    
+    const dependencies = "dependencies" in provider ? provider.dependencies ?? [] : [];
+    for (const dependency of dependencies) {
+        const dependencyScope = this.getProviderScope(dependency);
+        if (dependencyScope ===Scope.SCOPED) throw new Error(`Singleton provider cannot depend on scoped dependency`);
+    }
+  }
+// Recorre el grafo de dependencias de un SINGLETON
+// para detectar dependencias SCOPED directas o indirectas.
+private validateScopeGraph(token: InjectionToken,visited = new Set<InjectionToken>()): void {
+    if (visited.has(token)) return;
+    visited.add(token);
+    const provider = this.findProvider(token);
+    if (!provider)  return;
+    const scope = this.getProviderScope(token);
+    if (scope !== Scope.SINGLETON) return;
+    
+    const dependencies = "dependencies" in provider ? provider.dependencies ?? [] : [];
+    for (const dependency of dependencies) {
+        const dependencyScope = this.getProviderScope(dependency);
+        if (dependencyScope === Scope.SCOPED) throw new Error(`Invalid dependency scope: SINGLETON provider cannot depend on SCOPED provider (scoped dependency)`);
+        this.validateScopeGraph(dependency,visited);
+    }
+}
+  // Obtiene el scope de un provider.
+  // Sin scope explícito se trata como SINGLETON.
+  private getProviderScope(token: InjectionToken): Scope {
+    const provider = this.findProvider(token);
+    if (!provider) throw new Error(`No provider found for token "${this.describeToken(token)}"`);
+    
+    if (!("scope" in provider)) {
+        return Scope.SINGLETON;
+    }
+    return provider.scope ?? Scope.SINGLETON;
   }
 }

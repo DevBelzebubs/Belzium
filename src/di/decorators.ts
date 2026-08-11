@@ -5,6 +5,7 @@ import {
 
 import { Scope } from "./scope";
 import { InjectionToken } from "./token";
+// Opciones de @Service: ciclo de vida y dependencias a inyectar.
 export interface ServiceOptions {
     scope?: Scope;
     dependencies?: InjectionToken[];

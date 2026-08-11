@@ -18,32 +18,17 @@ export {
 } from "./reactive/effect";
 
 // Computed: valores derivados que se recalculan cuando cambian sus dependencias
-export {
-    computed,
-    ComputedRef
-} from "./reactive/computed";
+export { computed, ComputedRef } from "./reactive/computed";
 
 // Ref: variables reactivas individuales
-export {
-    ref,
-    RefImpl,
-    isRef,
-    IS_REF
-} from "./reactive/ref";
+export { ref, RefImpl, isRef, IS_REF } from "./reactive/ref";
 export type { Ref } from "./reactive/ref";
 
 // Watch: observa fuentes reactivas y ejecuta callbacks cuando cambian
-export {
-    watch,
-    watchEffect
-} from "./reactive/watch";
+export { watch, watchEffect } from "./reactive/watch";
 
 // Componentes: creación de instancias, setup y acceso a la instancia actual
-export {
-    createComponentInstance,
-    setupComponent,
-    getCurrentInstance
-} from "./component/component";
+export { createComponentInstance, setupComponent, getCurrentInstance } from "./component/component";
 export type {
     Component,
     ComponentInstance,
@@ -56,3 +41,6 @@ export type {
 export {
     createComponentProxy
 } from "./component/componentProxy";
+
+// DI: clases de configuración y beans (@Configuration / @Bean)
+export { Configuration, Bean } from "./di/decorators/index"

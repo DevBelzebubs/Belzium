@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { ApplicationContext } from "../src/di/applicationContext";
 import { Scope } from "../src/di/scope";
 import { Service } from "../src/di/decorators";
+import { createToken } from "../src/di/token";
 
 describe("ApplicationContext", () => {
 
@@ -488,5 +489,251 @@ it("Deberia cachear los factorys de providers singleton", () => {
         .toBe(second);
     expect(executions)
         .toBe(1);
+});
+it("Deberia describir tokens faltantes", () => {
+
+    const context =
+        new ApplicationContext();
+
+    const API_URL =
+        createToken<string>(
+            "API_URL"
+        );
+
+    expect(() =>
+        context.resolve(API_URL)
+    ).toThrow(
+        `No provider found for token "API_URL"`
+    );
+});
+it("Deberia compartir instancias de singleton mediante scopes", () => {
+
+    class SingletonService {}
+
+    const context =
+        new ApplicationContext();
+
+
+    context.registerProvider({
+        token: SingletonService,
+        useClass: SingletonService,
+        scope: Scope.SINGLETON
+    });
+
+
+    const scope =
+        context.createScope();
+
+
+    const rootInstance =
+        context.resolve(
+            SingletonService
+        );
+
+    const scopedInstance =
+        scope.resolve(
+            SingletonService
+        );
+
+
+    expect(scopedInstance)
+        .toBe(rootInstance);
+});
+it("Deberia crear diferentes instancias scoped para diferentes scopes", () => {
+
+    class ScopedService {}
+
+    const context =
+        new ApplicationContext();
+
+
+    context.registerProvider({
+        token: ScopedService,
+        useClass: ScopedService,
+        scope: Scope.SCOPED
+    });
+
+
+    const scopeA =
+        context.createScope();
+
+    const scopeB =
+        context.createScope();
+
+
+    const instanceA =
+        scopeA.resolve(
+            ScopedService
+        );
+
+    const instanceB =
+        scopeB.resolve(
+            ScopedService
+        );
+
+
+    expect(instanceA)
+        .not.toBe(instanceB);
+});
+it("Deberia reusar instancias scoped adentro del mismo scope", () => {
+
+    class ScopedService {}
+
+    const context =
+        new ApplicationContext();
+
+
+    context.registerProvider({
+        token: ScopedService,
+        useClass: ScopedService,
+        scope: Scope.SCOPED
+    });
+
+
+    const scope =
+        context.createScope();
+
+
+    const first =
+        scope.resolve(
+            ScopedService
+        );
+
+    const second =
+        scope.resolve(
+            ScopedService
+        );
+
+
+    expect(first)
+        .toBe(second);
+});
+it("Deberia rechazar dependencia de singleton en un provider scoped", () => {
+
+    const SCOPED =
+        createToken<object>(
+            "SCOPED"
+        );
+
+
+    class SingletonService {
+
+        constructor(
+            public dependency: object
+        ) {}
+    }
+
+
+    const context =
+        new ApplicationContext();
+
+
+    context.registerProvider({
+
+        token: SCOPED,
+
+        useFactory: () => ({}),
+
+        scope: Scope.SCOPED
+    });
+
+
+    context.registerProvider({
+
+        token: SingletonService,
+
+        useClass: SingletonService,
+
+        dependencies: [
+            SCOPED
+        ],
+
+        scope: Scope.SINGLETON
+    });
+
+
+    expect(() =>
+        context.resolve(
+            SingletonService
+        )
+    ).toThrow(
+        /cannot depend on SCOPED provider/i
+    );
+});
+it("Deberia rechazar singleton indirecto a dependencias scoped", () => {
+
+    const SCOPED =
+        createToken<object>(
+            "SCOPED"
+        );
+
+
+    const SINGLETON_B =
+        createToken<object>(
+            "SINGLETON_B"
+        );
+
+
+    class SingletonA {
+
+        constructor(
+            public dependency: object
+        ) {}
+    }
+
+
+    const context =
+        new ApplicationContext();
+
+
+    context.registerProvider({
+
+        token: SCOPED,
+
+        useFactory: () => ({}),
+
+        scope: Scope.SCOPED
+    });
+
+
+    context.registerProvider({
+
+        token: SINGLETON_B,
+
+        useFactory: (
+            dependency
+        ) => ({
+            dependency
+        }),
+
+        dependencies: [
+            SCOPED
+        ],
+
+        scope: Scope.SINGLETON
+    });
+
+
+    context.registerProvider({
+
+        token: SingletonA,
+
+        useClass: SingletonA,
+
+        dependencies: [
+            SINGLETON_B
+        ],
+
+        scope: Scope.SINGLETON
+    });
+
+
+    expect(() =>
+        context.resolve(
+            SingletonA
+        )
+    ).toThrow(
+        /scoped dependency/i
+    );
 });
 });
