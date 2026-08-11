@@ -1,5 +1,7 @@
 // VNode: representación virtual de un nodo del DOM
 
+import { RenderableComponent } from "../component/types";
+
 // Nodo de texto: symbol que distingue los nodos de texto de los elementos
 export const TEXT_NODE =
     Symbol("belzium:text");
@@ -27,30 +29,25 @@ export interface VNode {
     children: VNode[];
     text?: string;
     key?: VNodeKey;
+    component?: VNodeComponentState;
 }
+// Estado interno asociado a un vnode de componente
+export interface VNodeComponentState {
+    // Instancia creada mediante ApplicationContext
+    instance: RenderableComponent;
 
-export interface VNode {
-    // Tipo del nodo: tag del elemento o TEXT_NODE
-    type: VNodeType;
-    // Props del elemento: atributos y eventos on*
-    props: Record<string, unknown> | null;
-    // Hijos del elemento
-    children: VNode[];
-    // Contenido del nodo de texto
-    text?: string;
+    // Árbol virtual generado por el componente
+    subTree: VNode | null;
+    // Efecto reactivo del componente
+    effect?: {
+        stop(): void;
+    };
 }
 
 // Crea un vnode de elemento
-export function h(
-    type: VNodeType,
-    props: Record<string, unknown> | null = null,
-    children: VNode[] = []
-): VNode {
+export function h(type: VNodeType,props: Record<string, unknown> | null = null,children: VNode[] = []): VNode {
 
-    const key =
-        props?.key as
-        VNodeKey | undefined;
-
+    const key = props?.key as VNodeKey | undefined;
 
     const vnodeProps =
         props
@@ -82,4 +79,16 @@ export function text(
         children: [],
         text: value
     };
+}
+// Determina si dos VNodes pueden reutilizar la misma instancia
+export function isSameVNode(
+    oldVNode: VNode,
+    newVNode: VNode
+): boolean {
+    // Dos VNodes son compatibles cuando tienen
+    // el mismo tipo y la misma key
+    return (
+        oldVNode.type === newVNode.type &&
+        oldVNode.key === newVNode.key
+    );
 }
