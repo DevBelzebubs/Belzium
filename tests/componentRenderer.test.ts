@@ -7,6 +7,7 @@ import {
 } from "vitest";
 import { Component, ref } from "../src";
 import { ComponentRenderer } from "../src/runtime/componentRenderer";
+import { h, text } from "../src/runtime/vnode";
 
 
 describe("ComponentRenderer", () => {
@@ -21,11 +22,17 @@ describe("ComponentRenderer", () => {
             count =
                 ref(0);
             render() {
-                return `
-                    <button>
-                        ${this.count.value}
-                    </button>
-                `;
+                return h(
+                    "button",
+                    null,
+                    [
+                        text(
+                            String(
+                                this.count.value
+                            )
+                        )
+                    ]
+                );
             }
         }
 
@@ -52,94 +59,48 @@ describe("ComponentRenderer", () => {
             element.innerHTML
         ).toContain("0");
     });
+
     it("Deberia actualizar el dom cuando el estado cambia", () => {
 
-    @Component({
-        selector: "counter"
-    })
-    class Counter {
+        @Component({
+            selector: "counter"
+        })
+        class Counter {
 
-        count =
-            ref(0);
+            count =
+                ref(0);
 
 
-        render() {
-
-            return `
-                <span>
-                    ${this.count.value}
-                </span>
-            `;
+            render() {
+                return h(
+                    "span",
+                    null,
+                    [
+                        text(
+                            String(
+                                this.count.value
+                            )
+                        )
+                    ]
+                );
+            }
         }
-    }
 
 
-    const instance =
-        new Counter();
+        const instance =
+            new Counter();
 
 
-    const element =
-        document.createElement(
-            "div"
-        );
+        const element =
+            document.createElement(
+                "div"
+            );
 
 
-    const renderer =
-        new ComponentRenderer();
+        const renderer =
+            new ComponentRenderer();
 
 
-    renderer.mount(
-        Counter,
-        instance,
-        element
-    );
-
-
-    expect(
-        element.innerHTML
-    ).toContain("0");
-
-
-    instance.count.value = 10;
-
-
-    expect(
-        element.innerHTML
-    ).toContain("10");
-});
-it("Deberia parar de reaccionar despues de destruirse", () => {
-
-    @Component({
-        selector: "counter"
-    })
-    class Counter {
-
-        count =
-            ref(0);
-
-
-        render() {
-
-            return `${this.count.value}`;
-        }
-    }
-
-
-    const instance =
-        new Counter();
-
-
-    const element =
-        document.createElement(
-            "div"
-        );
-
-
-    const renderer =
-        new ComponentRenderer();
-
-
-    const mounted =
         renderer.mount(
             Counter,
             instance,
@@ -147,19 +108,213 @@ it("Deberia parar de reaccionar despues de destruirse", () => {
         );
 
 
-    expect(
-        element.innerHTML
-    ).toBe("0");
+        expect(
+            element.innerHTML
+        ).toContain("0");
 
 
-    mounted.dispose();
+        instance.count.value = 10;
 
 
-    instance.count.value = 10;
+        expect(
+            element.innerHTML
+        ).toContain("10");
+    });
+
+    it("Deberia parar de reaccionar despues de destruirse", () => {
+
+        @Component({
+            selector: "counter"
+        })
+        class Counter {
+
+            count =
+                ref(0);
 
 
-    expect(
-        element.innerHTML
-    ).toBe("0");
-});
+            render() {
+                return text(
+                    String(
+                        this.count.value
+                    )
+                );
+            }
+        }
+
+
+        const instance =
+            new Counter();
+
+
+        const element =
+            document.createElement(
+                "div"
+            );
+
+
+        const renderer =
+            new ComponentRenderer();
+
+
+        const mounted =
+            renderer.mount(
+                Counter,
+                instance,
+                element
+            );
+
+
+        expect(
+            element.innerHTML
+        ).toBe("0");
+
+
+        mounted.dispose();
+
+
+        instance.count.value = 10;
+
+
+        expect(
+            element.innerHTML
+        ).toBe("0");
+    });
+
+    it("Deberia actualizar el DOM con Pulses y VNodes", () => {
+
+        @Component({
+            selector: "counter"
+        })
+        class Counter {
+
+            count =
+                ref(0);
+
+
+            render() {
+                return h(
+                    "span",
+                    null,
+                    [
+                        text(
+                            String(
+                                this.count.value
+                            )
+                        )
+                    ]
+                );
+            }
+        }
+
+
+        const instance =
+            new Counter();
+
+
+        const element =
+            document.createElement(
+                "div"
+            );
+
+
+        const renderer =
+            new ComponentRenderer();
+
+
+        const mounted =
+            renderer.mount(
+                Counter,
+                instance,
+                element
+            );
+
+
+        // Render inicial
+        expect(
+            element.textContent
+        ).toBe("0");
+
+
+        // Modificación reactiva
+        instance.count.value = 10;
+
+
+        // El Pulse dispara el render nuevamente
+        // y el renderer actualiza solamente el nodo necesario
+        expect(
+            element.textContent
+        ).toBe("10");
+
+
+        mounted.dispose();
+    });
+
+    it("Debe preservar el DOM actual durate las actualizaciones reactivas", () => {
+
+        @Component({
+            selector: "counter"
+        })
+        class Counter {
+
+            count =
+                ref(0);
+
+
+            render() {
+                return h(
+                    "div",
+                    {
+                        class: "counter"
+                    },
+                    [
+                        text(
+                            String(
+                                this.count.value
+                            )
+                        )
+                    ]
+                );
+            }
+        }
+
+
+        const instance =
+            new Counter();
+
+
+        const container =
+            document.createElement(
+                "section"
+            );
+
+
+        const renderer =
+            new ComponentRenderer();
+
+
+        renderer.mount(
+            Counter,
+            instance,
+            container
+        );
+
+
+        const originalElement =
+            container.firstElementChild;
+
+
+        instance.count.value = 1;
+
+
+        expect(
+            container.firstElementChild
+        ).toBe(
+            originalElement
+        );
+
+
+        expect(
+            container.textContent
+        ).toBe("1");
+    });
 });

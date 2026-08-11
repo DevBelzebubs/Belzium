@@ -1,3 +1,5 @@
+import { VNode } from "../runtime/vnode";
+
 export interface ComponentOptions {
     // Selector que identifica el componente en el renderer
     selector: string;
@@ -10,5 +12,5 @@ export interface ComponentMetadata {
     selector: string;
 }
 export interface RenderableComponent {
-    render(): string;
+    render(): VNode;
 }
