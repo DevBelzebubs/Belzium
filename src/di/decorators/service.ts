@@ -16,27 +16,20 @@ export const SERVICE_METADATA =
 
 
 export interface ServiceOptions {
-
     token?: InjectionToken;
-
     dependencies?: InjectionToken[];
-
     scope?: Scope;
 }
 
-
 export interface ServiceMetadata {
-
     token: InjectionToken;
-
     dependencies: InjectionToken[];
-
     scope: Scope;
 }
 
 
-export function Service(
-    options: ServiceOptions = {}
+export function Service<T = unknown>(
+    options: ServiceOptions<T> = {}
 ): ClassDecorator {
     return (target) => {
         defineMetadata(SERVICE_METADATA,{
@@ -49,7 +42,7 @@ export function Service(
                 scope:
                     options.scope ??
                     Scope.SINGLETON
-            },
+            } satisfies ServiceMetadata<T>
             target
         );
     };

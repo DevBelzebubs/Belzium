@@ -475,4 +475,101 @@ it("Deberia detectar dependencias circulares", () => {
         /Circular dependency detected/
     );
 });
+it("Deberia registrar un service usando un token explícito", () => {
+
+    const USER_REPOSITORY =
+        createToken<UserRepository>(
+            "USER_REPOSITORY"
+        );
+
+
+    @Service({
+        token: USER_REPOSITORY
+    })
+    class UserRepository {
+
+        findUser() {
+            return "Juan";
+        }
+    }
+
+
+    const app =
+        new Application({
+            providers: [
+                UserRepository
+            ]
+        });
+
+
+    const repository =
+        app.resolve(
+            USER_REPOSITORY
+        );
+
+
+    expect(repository)
+        .toBeInstanceOf(
+            UserRepository
+        );
+
+
+    expect(
+        repository.findUser()
+    ).toBe("Juan");
+});
+it("Deberia inyectar un token usando un service explícito", () => {
+
+    const USER_REPOSITORY =
+        createToken<UserRepository>(
+            "USER_REPOSITORY"
+        );
+
+
+    @Service({
+        token: USER_REPOSITORY
+    })
+    class UserRepository {
+
+        findUser() {
+            return "Juan";
+        }
+    }
+
+
+    @Service({
+        dependencies: [
+            USER_REPOSITORY
+        ]
+    })
+    class UserService {
+
+        constructor(
+            private repository: UserRepository
+        ) {}
+
+
+        getUser() {
+            return this.repository.findUser();
+        }
+    }
+
+
+    const app =
+        new Application({
+            providers: [
+                UserRepository,
+                UserService
+            ]
+        });
+
+
+    const service =
+        app.resolve(UserService);
+
+
+    expect(
+        service.getUser()
+    ).toBe("Juan");
+});
 });

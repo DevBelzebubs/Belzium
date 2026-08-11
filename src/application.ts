@@ -4,10 +4,11 @@ import {
 } from "./di/applicationContext";
 
 import type { Provider } from "./di/provider";
+import { Constructor } from "./di/types";
 
 export type ApplicationProvider =
     | Provider
-    | (new (...args: any[]) => any);
+    | Constructor;
 
 export interface ApplicationOptions {
     providers?: ApplicationProvider[];
@@ -20,7 +21,7 @@ export class Application {
         this.context = new ApplicationContext();
         const bootstrap = new ApplicationBootstrap(this.context);
         for (const provider of options.providers ?? []) {
-            if (typeof provider ==="function") {
+            if (typeof provider === "function") {
                 bootstrap.register(provider);
             } else {
                 this.context.registerProvider(provider);
