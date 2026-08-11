@@ -8,6 +8,7 @@ import {
 import { Component, ref } from "../src";
 import { ComponentRenderer } from "../src/runtime/componentRenderer";
 import { h, text } from "../src/runtime/vnode";
+import { ApplicationContext } from "../src/di/applicationContext";
 
 
 describe("ComponentRenderer", () => {
@@ -317,4 +318,159 @@ describe("ComponentRenderer", () => {
             container.textContent
         ).toBe("1");
     });
+    it("should update a component through its own Pulse effect", () => {
+
+    @Component({
+        selector: "counter"
+    })
+    class Counter {
+
+        count =
+            ref(0);
+
+
+        render() {
+
+            return h(
+                "span",
+                null,
+                [
+                    text(
+                        String(
+                            this.count.value
+                        )
+                    )
+                ]
+            );
+        }
+    }
+
+
+    const context =
+        new ApplicationContext();
+
+
+    context.registerProvider({
+        token: Counter,
+        useClass: Counter
+    });
+
+
+    const instance =
+        context.resolve(Counter);
+
+
+    const container =
+        document.createElement(
+            "div"
+        );
+
+
+    const renderer =
+        new ComponentRenderer(
+            context
+        );
+
+
+    const mounted =
+        renderer.mount(
+            Counter,
+            instance,
+            container
+        );
+
+
+    expect(
+        container.textContent
+    ).toBe("0");
+
+
+    instance.count.value =
+        42;
+
+
+    expect(
+        container.textContent
+    ).toBe("42");
+
+
+    mounted.dispose();
+});
+it("should preserve the component root DOM node during updates", () => {
+
+    @Component({
+        selector: "counter"
+    })
+    class Counter {
+
+        count =
+            ref(0);
+
+
+        render() {
+
+            return h(
+                "div",
+                {
+                    class: "counter"
+                },
+                [
+                    text(
+                        String(
+                            this.count.value
+                        )
+                    )
+                ]
+            );
+        }
+    }
+
+
+    const context =
+        new ApplicationContext();
+
+
+    context.registerProvider({
+        token: Counter,
+        useClass: Counter
+    });
+
+
+    const instance =
+        context.resolve(Counter);
+
+
+    const container =
+        document.createElement(
+            "section"
+        );
+
+
+    const renderer =
+        new ComponentRenderer(
+            context
+        );
+
+
+    renderer.mount(
+        Counter,
+        instance,
+        container
+    );
+
+
+    const originalElement =
+        container.firstElementChild;
+
+
+    instance.count.value =
+        1;
+
+
+    expect(
+        container.firstElementChild
+    ).toBe(
+        originalElement
+    );
+});
 });

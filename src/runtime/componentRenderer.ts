@@ -1,81 +1,153 @@
-// ComponentRenderer: monta componentes que definen render() y reaccionan al estado
+// Renderer de componentes: conecta componentes, IoC, Pulse y VNodes
 
-import {
-    getComponentMetadata
-} from "../component/metadata";
+import { getComponentMetadata } from "../component/metadata";
+
+import type {
+    RenderableComponent
+} from "../component/types";
 
 import type {
     Constructor
 } from "../di/types";
 
+import {
+    ApplicationContext
+} from "../di/applicationContext";
+
 import type {
-    RenderableComponent
-} from "../component/types";
-import { effect } from "../reactive/effect";
-import { patch } from "./vnodeRenderer";
-import type { VNode } from "./vnode";
+    VNode
+} from "./vnode";
+
+import type {
+    ComponentInstance
+} from "./componentInstance";
+
+import {
+    patch
+} from "./vnodeRenderer";
+
+import {
+    effect
+} from "../reactive/effect";
 
 
-// Componente montado: instancia, elemento y forma de desmontarlo
-export interface MountedComponent<T extends RenderableComponent> {
+// Representa un componente montado dentro del DOM
+export interface MountedComponent<
+    T extends RenderableComponent = RenderableComponent
+> {
 
-    // Instancia del componente montado
+    // Instancia real del componente montado
     instance: T;
 
-    // Nodo DOM donde está montado
+    // Elemento donde se monta el componente
     element: Element;
 
-    // Detiene las reacciones al estado, desmontando el componente
+    // Detiene el efecto reactivo del componente
     dispose(): void;
 }
 
 
+// Renderer encargado de montar componentes
 export class ComponentRenderer {
 
-    // Monta el componente: renderiza y reacciona a los cambios de estado
+    // Contexto IoC utilizado para resolver
+    // componentes y sus dependencias
+    constructor(
+        private context: ApplicationContext
+    ) {}
+
+
+    // Monta una instancia de componente dentro de un elemento
     mount<T extends RenderableComponent>(
         component: Constructor<T>,
         instance: T,
         element: Element
     ): MountedComponent<T> {
 
-        // Verifica que la clase sea un componente
+        // Obtiene la metadata registrada por @Component
         const metadata =
-            getComponentMetadata(
-                component
-            );
+            getComponentMetadata(component);
+
+
+        // Verifica que la clase sea un componente válido
         if (!metadata) {
             throw new Error(
                 `Class is not a component`
             );
         }
-        let currentVNode: VNode | null = null;
-        // Efecto que re-renderiza el componente cada vez que cambia su estado
+
+
+        // Estado interno del componente.
+        // Contiene la instancia, su árbol virtual
+        // y el efecto responsable de actualizarlo.
+        const componentInstance:
+            ComponentInstance<T> = {
+
+            // Instancia real del componente
+            instance,
+
+            // VNode que representa al componente
+            vnode: {
+                type: component,
+                props: null,
+                children: []
+            },
+
+            // El componente todavía no ha generado
+            // su primer árbol virtual
+            subTree: null,
+
+            // Nodo donde será montado
+            element,
+
+            // Se reemplaza inmediatamente
+            // por el stop del efecto
+            dispose: () => {}
+        };
+
+
+        // Ejecuta el render dentro de Pulse.
+        // Cada dependencia reactiva utilizada durante
+        // render() queda asociada al componente.
         const renderEffect =
             effect(() => {
+
                 // Genera el nuevo árbol virtual
                 const nextVNode =
                     instance.render();
-                // Compara el árbol anterior con el nuevo
+
+
+                // Compara el árbol anterior
+                // con el nuevo árbol
                 patch(
-                    currentVNode,
+                    componentInstance.subTree,
                     nextVNode,
-                    element
+                    element,
+                    0,
+                    this.context
                 );
-                // El nuevo árbol pasa a ser el anterior
-                // para la siguiente actualización
-                currentVNode =
+
+
+                // Guarda el árbol actual.
+                // El siguiente render utilizará este
+                // árbol como referencia para el diff.
+                componentInstance.subTree =
                     nextVNode;
             });
-        // Detiene el efecto para desmontar el componente
-        const dispose =
+
+
+        // Guarda la función que detiene
+        // el efecto reactivo del componente
+        componentInstance.dispose =
             () => renderEffect.stop();
 
-        // Devuelve la instancia montada y su mecanismo de destrucción
+
+        // Devuelve la API pública del componente montado
         return {
             instance,
             element,
-            dispose
+            dispose:
+                componentInstance.dispose
         };
     }
 }

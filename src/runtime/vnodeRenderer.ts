@@ -1,12 +1,24 @@
 // Renderer de vnodes: convierte el árbol virtual en nodos reales del DOM
 
-import { TEXT_NODE, VNodeKey, type VNode } from "./vnode";
-
+import { ApplicationContext } from "../di/applicationContext";
+import { ComponentConstructor, TEXT_NODE, VNodeKey, type VNode } from "./vnode";
 // Convierte un vnode en un elemento real del DOM
-export function createElement(vnode: VNode): Node {
+// Convierte un vnode en un nodo real del DOM
+export function createElement(vnode: VNode, context?: ApplicationContext): Node {
   // Si es un nodo de texto, se crea un nodo de texto real
   if (vnode.type === TEXT_NODE) {
     return document.createTextNode(vnode.text ?? "");
+  }
+
+  // Los componentes se montan mediante su propio renderer
+  if (typeof vnode.type === "function") {
+    if (!context) {
+        throw new Error(`ApplicationContext is required to render a component`);
+    }
+    return mountComponent(
+        vnode,
+        context
+    );
   }
 
   // Crea el elemento según el tag del vnode
@@ -17,7 +29,7 @@ export function createElement(vnode: VNode): Node {
 
   // Crea los hijos recursivamente y los agrega al elemento
   for (const child of vnode.children) {
-    element.appendChild(createElement(child));
+    element.appendChild(createElement(child, context));
   }
 
   return element;
@@ -29,6 +41,7 @@ export function patch(
   newVNode: VNode | null,
   container: Node,
   index = 0,
+  context?: ApplicationContext
 ): Node | null {
   // Si no existía un vnode anterior, se crea e inserta el nuevo
   if (!oldVNode && newVNode) {
@@ -72,11 +85,7 @@ export function patch(
 }
 
 // Actualiza un nodo real existente comparando su vnode anterior con el nuevo
-function patchNode(
-  oldVNode: VNode,
-  newVNode: VNode,
-  currentNode: Node,
-): Node {
+function patchNode(oldVNode: VNode, newVNode: VNode, currentNode: Node): Node {
   // Si los tipos son diferentes, se reemplaza completamente el nodo
   if (oldVNode.type !== newVNode.type) {
     const node = createElement(newVNode);
@@ -278,4 +287,32 @@ function patchKeyedChildren(
       }
     }
   }
+}
+// Crea el nodo DOM correspondiente a un vnode de componente
+function createComponentElement(vnode: VNode): Node {
+  // Obtiene el constructor del componente
+  const Component = vnode.type as ComponentConstructor;
+  // Crea la instancia del componente
+  const instance = new Component();
+  // Renderiza el componente para obtener su vnode raíz
+  const renderedVNode = instance.render();
+
+  // Convierte el vnode del componente en DOM
+  return createElement(renderedVNode);
+}
+export function mountComponent(
+  vnode: VNode,
+  context: ApplicationContext,
+): Node {
+  // Obtiene el constructor del componente
+  const Component = vnode.type as ComponentConstructor;
+
+  // Resuelve la instancia mediante el ApplicationContext
+  const instance = context.resolve(Component);
+
+  // Renderiza el componente para obtener su vnode raíz
+  const renderedVNode = instance.render();
+
+  // Convierte el vnode resultante en DOM
+  return createElement(renderedVNode);
 }

@@ -4,11 +4,15 @@
 export const TEXT_NODE =
     Symbol("belzium:text");
 
-
+export type ComponentConstructor =
+    new (...args: any[]) => {
+        render(): VNode;
+    };
 // Tipo de un vnode: el tag del elemento o un nodo de texto
 export type VNodeType =
     | string
-    | typeof TEXT_NODE;
+    | typeof TEXT_NODE
+    | ComponentConstructor;
 
 export type VNodeKey =
     | string
@@ -38,7 +42,7 @@ export interface VNode {
 
 // Crea un vnode de elemento
 export function h(
-    type: string,
+    type: VNodeType,
     props: Record<string, unknown> | null = null,
     children: VNode[] = []
 ): VNode {
