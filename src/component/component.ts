@@ -110,12 +110,19 @@ function setCurrentInstance(instance: ComponentInstance | null) {
   // Setea la instancia actual
   currentInstance = instance;
 }
-export function Component(options: ComponentOptions) {
+export function Component(
+  options: ComponentOptions,
+): <T extends new (...args: never[]) => object>(target: T) => T;
+
+// Implementación común de ambas formas del decorador.
+export function Component(options: ComponentOptions = {}) {
   return <T extends new (...args: never[]) => object>(target: T): T => {
+    // Registra la metadata del componente.
     defineComponentMetadata(target, {
       type: target,
       selector: options.selector,
     });
+
     return target;
   };
 }

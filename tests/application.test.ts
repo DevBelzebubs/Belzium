@@ -6,9 +6,10 @@ import {
 import { Application, createApplication } from "../src/core/application";
 import { Service } from "../src/di/decorators";
 import { ApplicationContext } from "../src/di/applicationContext";
-import { Bean, Configuration } from "../src";
+import { Bean, Component, Configuration, createApp } from "../src";
 import { createToken } from "../src/di/token";
 import { Scope } from "../src/di/scope";
+import { h, text } from "../src/runtime/vnode";
 
 
 
@@ -572,4 +573,198 @@ it("Deberia inyectar un token usando un service explícito", () => {
         service.getUser()
     ).toBe("Juan");
 });
+
+});
+describe("createApp", () => {
+
+    it("crea una aplicación Belzium", () => {
+
+        @Component()
+        class App {
+
+            render() {
+                return h(
+                    "div",
+                    null,
+                    [
+                        text("Hello Belzium"),
+                    ],
+                );
+            }
+        }
+
+        const app =
+            createApp(App);
+
+        expect(app)
+            .toBeDefined();
+
+        expect(app.context)
+            .toBeDefined();
+    });
+
+
+    it("monta el componente raíz", () => {
+
+        document.body.innerHTML =
+            `<div id="app"></div>`;
+
+
+        @Component()
+        class App {
+
+            render() {
+                return h(
+                    "div",
+                    null,
+                    [
+                        text("Hello Belzium"),
+                    ],
+                );
+            }
+        }
+
+
+        const app =
+            createApp(App);
+
+        app.mount("#app");
+
+
+        const element =
+            document.querySelector("#app");
+
+
+        expect(element?.innerHTML)
+            .toBe(
+                "<div>Hello Belzium</div>"
+            );
+    });
+
+
+    it("acepta un Element directamente", () => {
+
+        const root =
+            document.createElement("div");
+
+
+        @Component()
+        class App {
+
+            render() {
+                return h(
+                    "span",
+                    null,
+                    [
+                        text("Belzium"),
+                    ],
+                );
+            }
+        }
+
+
+        const app =
+            createApp(App);
+
+        app.mount(root);
+
+
+        expect(root.innerHTML)
+            .toBe(
+                "<span>Belzium</span>"
+            );
+    });
+
+
+    it("rechaza un selector inexistente", () => {
+
+        @Component()
+        class App {
+
+            render() {
+                return h("div");
+            }
+        }
+
+
+        const app =
+            createApp(App);
+
+
+        expect(() => {
+            app.mount("#does-not-exist");
+        }).toThrow(
+            "Mount target not found"
+        );
+    });
+
+
+    it("no permite montar dos veces", () => {
+
+        document.body.innerHTML =
+            `<div id="app"></div>`;
+
+
+        @Component()
+        class App {
+
+            render() {
+                return h("div");
+            }
+        }
+
+
+        const app =
+            createApp(App);
+
+
+        app.mount("#app");
+
+
+        expect(() => {
+            app.mount("#app");
+        }).toThrow(
+            "Application is already mounted"
+        );
+    });
+
+
+    it("permite desmontar la aplicación", () => {
+
+        document.body.innerHTML =
+            `<div id="app"></div>`;
+
+
+        @Component()
+        class App {
+
+            render() {
+                return h(
+                    "div",
+                    null,
+                    [
+                        text("Hello"),
+                    ],
+                );
+            }
+        }
+
+
+        const app =
+            createApp(App);
+
+
+        app.mount("#app");
+
+        app.unmount();
+
+
+        const element =
+            document.querySelector("#app");
+
+
+        expect(element?.innerHTML)
+            .toBe("");
+    });
+
 });

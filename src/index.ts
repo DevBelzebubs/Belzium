@@ -54,3 +54,11 @@ export { createComponentProxy } from "./component/componentProxy";
 
 // Configuración declarativa del IoC.
 export { Configuration, Bean } from "./di/decorators/index";
+// Application: punto de entrada del runtime.
+export {
+    createApp,
+} from "./runtime/application";
+
+export type {
+    BelziumApplication,
+} from "./runtime/application";
