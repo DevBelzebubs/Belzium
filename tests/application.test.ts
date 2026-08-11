@@ -6,6 +6,8 @@ import {
 import { Application, createApplication } from "../src/core/application";
 import { Service } from "../src/di/decorators";
 import { ApplicationContext } from "../src/di/applicationContext";
+import { Bean, Configuration } from "../src";
+import { createToken } from "../src/di/token";
 
 
 
@@ -78,5 +80,40 @@ describe("Application", () => {
                 ApplicationContext
             );
     });
+it("Deberia iniciar configuraciones", () => {
 
+        const API_URL =
+            createToken<string>(
+                "API_URL"
+            );
+        @Configuration()
+        class AppConfig {
+
+            @Bean({
+                token: API_URL
+            })
+            apiUrl() {
+
+                return "https://api.example.com";
+            }
+        }
+
+
+        const app =
+            new Application({
+
+                providers: [
+                    AppConfig
+                ]
+            });
+
+
+        expect(
+            app.resolve<string>(
+                API_URL
+            )
+        ).toBe(
+            "https://api.example.com"
+        );
+    });
 });

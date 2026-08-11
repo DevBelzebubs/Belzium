@@ -3,6 +3,7 @@ import { ApplicationContext } from "../src/di/applicationContext";
 import { Scope } from "../src/di/scope";
 import { Service } from "../src/di/decorators";
 import { createToken } from "../src/di/token";
+import { Bean, Configuration } from "../src";
 
 describe("ApplicationContext", () => {
 
@@ -734,6 +735,59 @@ it("Deberia rechazar singleton indirecto a dependencias scoped", () => {
         )
     ).toThrow(
         /scoped dependency/i
+    );
+});
+it("Deberia registrar configuración de clases", () => {
+
+    const API_URL =
+        createToken<string>(
+            "API_URL"
+        );
+
+
+    @Configuration()
+    class AppConfig {
+
+        @Bean({
+            token: API_URL
+        })
+        apiUrl() {
+
+            return "https://api.example.com";
+        }
+    }
+
+
+    const context =
+        new ApplicationContext();
+
+
+    context.registerConfiguration(
+        AppConfig
+    );
+
+
+    expect(
+        context.resolve(API_URL)
+    ).toBe(
+        "https://api.example.com"
+    );
+});
+it("Deberia rechazar clases sin @Configuración", () => {
+
+    class NotConfiguration {}
+
+
+    const context =
+        new ApplicationContext();
+
+
+    expect(() =>
+        context.registerConfiguration(
+            NotConfiguration
+        )
+    ).toThrow(
+        /not marked with @Configuration/i
     );
 });
 });

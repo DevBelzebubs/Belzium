@@ -2,6 +2,16 @@ import {
     ApplicationContext
 } from "../di/applicationContext";
 
+import {
+    ConfigurationProcessor
+} from "../di/configurationProcessor";
+
+import {
+    CONFIGURATION_METADATA
+} from "../di/decorators/configuration";
+
+import { getMetadata } from "../di/metadata";
+
 import type {
     InjectionToken
 } from "../di/token";
@@ -14,7 +24,13 @@ export class Application {
     readonly context: ApplicationContext;
     constructor(options: ApplicationOptions = {}) {
         this.context = new ApplicationContext();
-        if (options.providers) this.context.registerComponents(options.providers);
+        for (const provider of options.providers ?? []) {
+            if (getMetadata(CONFIGURATION_METADATA, provider)) {
+                new ConfigurationProcessor().process(new provider(), this.context);
+            } else {
+                this.context.registerComponent(provider);
+            }
+        }
     }
     resolve<T>(token: InjectionToken<T>): T {
         return this.context.resolve(token);

@@ -19,15 +19,18 @@ export class ConfigurationProcessor {
     process(configuration: object,context: ApplicationContext): void {
         // Verificar que la clase esté marcada como configuración.
         const constructor = configuration.constructor;
-        const isConfiguration = getMetadata(CONFIGURATION_METADATA,constructor);
+        const isConfiguration = getMetadata<Boolean>(CONFIGURATION_METADATA,constructor);
         if (!isConfiguration) throw new Error(`Class is not marked with @Configuration`);
         // Sin beans declarados no hay nada que registrar.
-        const beans = getMetadata(BEAN_METADATA,constructor) as BeanMetadata[] | undefined;
+        const beans = getMetadata<BeanMetadata[]>(BEAN_METADATA,constructor) as BeanMetadata[] | undefined;
         if (!beans) return;
         // Validar que cada propiedad @Bean sea un método.
         for (const bean of beans) {
-            const factory = (configuration as any)[bean.propertyKey];
-            if (typeof factory !== "function") throw new Error(`@Bean target must be a method`);
+            const method = (configuration as Record<PropertyKey, unknown>)[bean.propertyKey];
+            if (typeof method !=="function") {
+                throw new Error(`@Bean target must be a method`);
+            }
+            context.registerProvider({token : bean.token ,dependencies: bean.dependencies,scope: bean.scope, useFactory: (...dependencies) => method.call(configuration,...dependencies)});
         }
     }
 }

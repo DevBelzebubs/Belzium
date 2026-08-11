@@ -1,5 +1,6 @@
-import { BEAN_METADATA, type BeanMetadata } from "./bean";
+import { BEAN_METADATA, type BeanMetadata, type BeanOptions } from "./bean";
 import { defineMetadata, getMetadata } from "../metadata";
+import { Scope } from "../scope";
 
 // Metadata que identifica clases de configuración.
 export const CONFIGURATION_METADATA =
@@ -13,9 +14,14 @@ export function Configuration(): ClassDecorator {
         const beans: BeanMetadata[] = [];
         for (const propertyKey of Object.getOwnPropertyNames(target.prototype)) {
             if (propertyKey === "constructor") continue;
-            if (getMetadata(BEAN_METADATA, target.prototype[propertyKey])) {
-                beans.push({ propertyKey });
-            }
+            const options = getMetadata<BeanOptions>(BEAN_METADATA, target.prototype[propertyKey]);
+            if (!options) continue;
+            beans.push({
+                propertyKey,
+                token: options.token ?? propertyKey,
+                dependencies: options.dependencies,
+                scope: options.scope ?? Scope.SINGLETON
+            });
         }
         defineMetadata(BEAN_METADATA, beans, target);
     };

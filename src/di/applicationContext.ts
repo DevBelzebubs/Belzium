@@ -2,7 +2,9 @@ import { componentToProvider } from "./metadata";
 import { Provider } from "./provider";
 import { Scope } from "./scope";
 import { Token, type InjectionToken } from "./token";
-
+import {
+    ConfigurationProcessor
+} from "./configurationProcessor";
 export class ApplicationContext {
   // =========================================================
   // REGISTRO BY JD (ING. DIBUJITO)
@@ -338,5 +340,10 @@ private validateScopeGraph(token: InjectionToken,visited = new Set<InjectionToke
         return Scope.SINGLETON;
     }
     return provider.scope ?? Scope.SINGLETON;
+  }
+  registerConfiguration(configuration: new () => object): void {
+    const instance = new configuration();
+    const processor = new ConfigurationProcessor();
+    processor.process(instance,this);
   }
 }

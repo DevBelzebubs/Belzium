@@ -1,3 +1,4 @@
+import { Configuration } from "../src";
 import { createApplication } from "../src/core/application";
 import { Service } from "../src/di/decorators";
 
