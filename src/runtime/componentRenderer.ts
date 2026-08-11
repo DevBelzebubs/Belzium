@@ -9,7 +9,7 @@ import type { Constructor } from "../di/types";
 import { ApplicationContext } from "../di/applicationContext";
 
 import type { VNode } from "./vnode";
-
+import { effectScope, type EffectScope } from "../reactive/effectScope";
 import type { ComponentInstance } from "./componentInstance";
 
 import { patch } from "./vnodeRenderer";
@@ -17,12 +17,17 @@ import { patch } from "./vnodeRenderer";
 import { effect } from "../reactive/effect";
 
 // Representa un componente montado dentro del DOM
-export interface MountedComponent<T extends RenderableComponent = RenderableComponent,> {
+export interface MountedComponent<
+  T extends RenderableComponent = RenderableComponent,
+> {
   // Instancia real del componente montado
   instance: T;
 
   // Elemento donde se monta el componente
   element: Element;
+
+  // Scope reactivo perteneciente al ciclo de vida del componente
+  scope: EffectScope;
 
   // Detiene el efecto reactivo del componente
   dispose(): void;
@@ -48,58 +53,46 @@ export class ComponentRenderer {
       throw new Error(`Class is not a component`);
     }
 
-    // Estado interno del componente.
-    // Contiene la instancia, su árbol virtual
-    // y el efecto responsable de actualizarlo.
-    const componentInstance: ComponentInstance<T> = {
-      // Instancia real del componente
-      instance,
+    // Cada montaje posee su propio
+    // ciclo de vida reactivo.
+    const scope = effectScope();
 
-      // VNode que representa al componente
-      vnode: {
-        type: component,
-        props: null,
-        children: [],
-      },
+    // Árbol virtual actualmente renderizado
+    // por este componente.
+    let currentVNode: VNode | null = null;
 
-      // El componente todavía no ha generado
-      // su primer árbol virtual
-      subTree: null,
+    // Ejecuta el render dentro del scope.
+    const renderEffect = scope.run(() => {
+      return effect(() => {
+        // Genera el nuevo árbol virtual
+        const nextVNode = instance.render();
 
-      // Nodo donde será montado
-      element,
+        // Compara el árbol anterior
+        // con el nuevo.
+        patch(currentVNode, nextVNode, element, 0, this.context);
 
-      // Se reemplaza inmediatamente
-      // por el stop del efecto
-      dispose: () => {},
-    };
-
-    // Ejecuta el render dentro de Pulse.
-    // Cada dependencia reactiva utilizada durante
-    // render() queda asociada al componente.
-    const renderEffect = effect(() => {
-      // Genera el nuevo árbol virtual
-      const nextVNode = instance.render();
-
-      // Compara el árbol anterior
-      // con el nuevo árbol
-      patch(componentInstance.subTree, nextVNode, element, 0, this.context);
-
-      // Guarda el árbol actual.
-      // El siguiente render utilizará este
-      // árbol como referencia para el diff.
-      componentInstance.subTree = nextVNode;
+        // Guarda el árbol actual
+        // para la siguiente actualización.
+        currentVNode = nextVNode;
+      });
     });
 
-    // Guarda la función que detiene
-    // el efecto reactivo del componente
-    componentInstance.dispose = () => renderEffect.stop();
+    // El scope ya contiene
+    // automáticamente el render effect.
+    if (!renderEffect) {
+      throw new Error(`Component render effect was not created`);
+    }
 
-    // Devuelve la API pública del componente montado
+    // Detiene todo el scope del componente.
+    const dispose = () => {
+      scope.stop();
+    };
+
     return {
       instance,
       element,
-      dispose: componentInstance.dispose,
+      scope,
+      dispose,
     };
   }
 }

@@ -1,7 +1,7 @@
 // Tests del ciclo de vida de EffectScope.
 
 import { describe, expect, it } from "vitest";
-import { ref, effect } from "../src";
+import { ref, effect, watch, watchEffect } from "../src";
 import { effectScope } from "../src/reactive/effectScope";
 describe("EffectScope", () => {
   it("crea un scope activo", () => {
@@ -229,5 +229,85 @@ describe("EffectScope", () => {
     parentState.value++;
 
     expect(parentExecutions).toBe(4);
+  });
+  it("detiene watch al detener el scope", () => {
+    const scope = effectScope();
+
+    const state = ref(0);
+
+    let executions = 0;
+
+    scope.run(() => {
+      watch(
+        () => state.value,
+        () => {
+          executions++;
+        },
+      );
+    });
+
+    state.value++;
+
+    expect(executions).toBe(1);
+
+    scope.stop();
+
+    state.value++;
+
+    expect(executions).toBe(1);
+  });
+  it("detiene watchEffect al detener el scope", () => {
+    const scope = effectScope();
+
+    const state = ref(0);
+
+    let executions = 0;
+
+    scope.run(() => {
+      watchEffect(() => {
+        executions++;
+
+        state.value;
+      });
+    });
+
+    // Ejecución inicial.
+    expect(executions).toBe(1);
+
+    state.value++;
+
+    expect(executions).toBe(2);
+
+    scope.stop();
+
+    state.value++;
+
+    // Ya no debe reaccionar.
+    expect(executions).toBe(2);
+  });
+  it("no detiene efectos creados fuera del scope", () => {
+    const state = ref(0);
+
+    let executions = 0;
+
+    const reactiveEffect = effect(() => {
+      executions++;
+
+      state.value;
+    });
+
+    const scope = effectScope();
+
+    scope.run(() => {
+      // No pertenece al scope.
+    });
+
+    scope.stop();
+
+    state.value++;
+
+    expect(executions).toBe(2);
+
+    reactiveEffect.stop();
   });
 });
