@@ -1,1 +1,1 @@
-{"name":"belzium","version":"0.0.0","private":true,"type":"module","scripts":{"test":"vitest run"},"devDependencies":{"vitest":"^1.0.0"}}
+{"name":"belzium","version":"0.0.0","private":true,"type":"module","scripts":{"test":"vitest run"},"devDependencies":{"jsdom":"^29.1.1","vitest":"^1.0.0"}}

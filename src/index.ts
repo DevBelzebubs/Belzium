@@ -27,10 +27,9 @@ export type { Ref } from "./reactive/ref";
 // Watch: observa fuentes reactivas y ejecuta callbacks cuando cambian
 export { watch, watchEffect } from "./reactive/watch";
 
-// Componentes: creación de instancias, setup y acceso a la instancia actual
-export { createComponentInstance, setupComponent, getCurrentInstance } from "./component/component";
+// Componentes: decorador, creación de instancias, setup y acceso a la instancia actual
+export { createComponentInstance, setupComponent, getCurrentInstance, Component } from "./component/component";
 export type {
-    Component,
     ComponentInstance,
     ComponentPublicInstance,
     SetupContext,

@@ -1,5 +1,7 @@
 import { createComponentProxy } from "./componentProxy";
 import type { InjectionKey, Provides } from "./injection";
+import { defineComponentMetadata } from "./metadata";
+import { ComponentOptions } from "./types";
 
 export type EmitFn = (event: string, ...args: unknown[]) => void;
 export interface SetupContext {
@@ -88,20 +90,32 @@ export function provide<T>(key: InjectionKey<T>, value: T) {
   }
   instance.provides[key] = value;
 }
-export function inject<T>(key: InjectionKey<T>, defaultValue?: T): T | undefined {
-    // Inyecta un valor proporcionado por un componente ancestro, o el valor por defecto si no existe
-    const instance = getCurrentInstance();
-    if (!instance) {
-        return defaultValue;
-    }
-
-    if (key in instance.provides) {
-        return instance.provides[key] as T;
-    }
-
+export function inject<T>(
+  key: InjectionKey<T>,
+  defaultValue?: T,
+): T | undefined {
+  // Inyecta un valor proporcionado por un componente ancestro, o el valor por defecto si no existe
+  const instance = getCurrentInstance();
+  if (!instance) {
     return defaultValue;
+  }
+
+  if (key in instance.provides) {
+    return instance.provides[key] as T;
+  }
+
+  return defaultValue;
 }
 function setCurrentInstance(instance: ComponentInstance | null) {
   // Setea la instancia actual
   currentInstance = instance;
+}
+export function Component(options: ComponentOptions) {
+  return <T extends new (...args: never[]) => object>(target: T): T => {
+    defineComponentMetadata(target, {
+      type: target,
+      selector: options.selector,
+    });
+    return target;
+  };
 }

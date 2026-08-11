@@ -54,7 +54,7 @@ export interface FactoryProvider<T = unknown> {
         InjectionToken<T>;
 
     useFactory:
-        (...dependencies: unknown[]) => T;
+        (...args: any[]) => T;
 
     /**
      * Tokens que se resolverán y pasarán

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { ref, type Ref } from "../src/reactive/ref";
-import { createComponentInstance, getCurrentInstance, setupComponent } from "../src/component/component";
+import { Component, createComponentInstance, getCurrentInstance, setupComponent } from "../src/component/component";
+import { getComponentMetadata } from "../src/component/metadata";
 
 describe("component", () => {
 
@@ -228,5 +229,26 @@ it("No deberia de desempaquetar valores normales", () => {
         instance.proxy.count
     ).toBe(10);
 });
+it("Deberia registrar metadata el componente", () => {
+        @Component({
+            selector: "user-card"
+        })
+        class UserCard {}
 
+
+        const metadata =
+            getComponentMetadata(
+                UserCard
+            );
+
+
+        expect(metadata)
+            .toBeDefined();
+        expect(metadata?.selector)
+            .toBe("user-card");
+
+
+        expect(metadata?.type)
+            .toBe(UserCard);
+    });
 });

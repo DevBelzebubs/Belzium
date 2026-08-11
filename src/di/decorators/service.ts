@@ -15,15 +15,15 @@ export const SERVICE_METADATA =
     Symbol("belzeflow:service");
 
 
-export interface ServiceOptions {
-    token?: InjectionToken;
-    dependencies?: InjectionToken[];
+export interface ServiceOptions<T = unknown> {
+    token?: InjectionToken<T>;
+    dependencies?: InjectionToken<T>[];
     scope?: Scope;
 }
 
-export interface ServiceMetadata {
-    token: InjectionToken;
-    dependencies: InjectionToken[];
+export interface ServiceMetadata<T = unknown> {
+    token: InjectionToken<T>;
+    dependencies: InjectionToken<T>[];
     scope: Scope;
 }
 
@@ -34,15 +34,15 @@ export function Service<T = unknown>(
     return (target) => {
         defineMetadata(SERVICE_METADATA,{
                 token:
-                    options.token ??
-                    target,
+                    (options.token ??
+                    target) as InjectionToken<T>,
                 dependencies:
                     options.dependencies ??
                     [],
                 scope:
                     options.scope ??
                     Scope.SINGLETON
-            } satisfies ServiceMetadata<T>
+            } satisfies ServiceMetadata<T>,
             target
         );
     };
