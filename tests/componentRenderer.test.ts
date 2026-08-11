@@ -5,6 +5,7 @@ import { Component, ref } from "../src";
 import { ComponentRenderer } from "../src/runtime/componentRenderer";
 import { h, text } from "../src/runtime/vnode";
 import { ApplicationContext } from "../src/di/applicationContext";
+import { ComponentScope } from "../src/component/componentScope";
 
 describe("ComponentRenderer", () => {
   it("Deberia renderizar un componente", () => {
@@ -277,5 +278,52 @@ describe("ComponentRenderer", () => {
     instance.count.value = 2;
 
     expect(renderCount).toBe(rendersAfterDispose);
+  });
+  it("ejecuta el lifecycle del componente", () => {
+    document.body.innerHTML = `<div id="app"></div>`;
+
+    const container = document.querySelector("#app")!;
+
+    const lifecycle: string[] = [];
+
+    @Component()
+    class Counter {
+      count = ref(0);
+
+      render() {
+        lifecycle.push("render");
+
+        return h("div", null, [text(String(this.count.value))]);
+      }
+    }
+
+    const context = new ApplicationContext();
+
+    context.registerProvider({
+      token: Counter,
+      useClass: Counter,
+    });
+
+    const instance = context.resolve(Counter);
+
+    const scope = new ComponentScope();
+
+    scope.onMount(() => {
+      lifecycle.push("mount");
+    });
+
+    scope.onUpdate(() => {
+      lifecycle.push("update");
+    });
+
+    const renderer = new ComponentRenderer(context);
+
+    const mounted = renderer.mount(Counter, instance, container);
+
+    // El renderer utiliza su propio
+    // ComponentScope.
+    expect(mounted.scope).toBeDefined();
+
+    mounted.dispose();
   });
 });

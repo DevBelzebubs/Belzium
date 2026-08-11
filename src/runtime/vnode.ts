@@ -1,5 +1,6 @@
 // VNode: representación virtual de un nodo del DOM
 
+import { ComponentScope } from "../component/componentScope";
 import type { RenderableComponent } from "../component/types";
 
 // Nodo de texto: symbol que distingue los nodos de texto
@@ -49,9 +50,7 @@ export interface VNodeComponentState {
   subTree: VNode | null;
 
   // Efecto Pulse asociado al componente
-  effect?: {
-    stop(): void;
-  };
+  scope: ComponentScope;
 }
 
 // Crea un VNode de elemento o componente

@@ -9,7 +9,7 @@ import type { Constructor } from "../di/types";
 import { ApplicationContext } from "../di/applicationContext";
 
 import type { VNode } from "./vnode";
-import { effectScope, type EffectScope } from "../reactive/effectScope";
+import { ComponentScope } from "../component/componentScope";
 import type { ComponentInstance } from "./componentInstance";
 
 import { patch } from "./vnodeRenderer";
@@ -27,7 +27,7 @@ export interface MountedComponent<
   element: Element;
 
   // Scope reactivo perteneciente al ciclo de vida del componente
-  scope: EffectScope;
+  scope: ComponentScope;
 
   // Detiene el efecto reactivo del componente
   dispose(): void;
@@ -45,47 +45,46 @@ export class ComponentRenderer {
     instance: T,
     element: Element,
   ): MountedComponent<T> {
-    // Obtiene la metadata registrada por @Component
+    // Obtiene la metadata registrada por @Component.
     const metadata = getComponentMetadata(component);
 
-    // Verifica que la clase sea un componente válido
+    // Verifica que la clase sea un componente válido.
     if (!metadata) {
       throw new Error(`Class is not a component`);
     }
 
-    // Cada montaje posee su propio
-    // ciclo de vida reactivo.
-    const scope = effectScope();
+    // Cada instancia montada posee
+    // su propio ciclo de vida.
+    const scope = new ComponentScope();
 
-    // Árbol virtual actualmente renderizado
-    // por este componente.
+    // Árbol virtual generado durante
+    // el último render.
     let currentVNode: VNode | null = null;
 
-    // Ejecuta el render dentro del scope.
-    const renderEffect = scope.run(() => {
-      return effect(() => {
-        // Genera el nuevo árbol virtual
+    // Ejecuta el render dentro del
+    // ComponentScope.
+    scope.run(() => {
+      effect(() => {
+        // Genera el nuevo árbol virtual.
         const nextVNode = instance.render();
 
         // Compara el árbol anterior
         // con el nuevo.
         patch(currentVNode, nextVNode, element, 0, this.context);
 
-        // Guarda el árbol actual
-        // para la siguiente actualización.
+        // Conserva el árbol actual.
         currentVNode = nextVNode;
       });
     });
 
-    // El scope ya contiene
-    // automáticamente el render effect.
-    if (!renderEffect) {
-      throw new Error(`Component render effect was not created`);
-    }
+    // El componente ya fue renderizado
+    // y su DOM inicial existe.
+    scope.mount();
 
-    // Detiene todo el scope del componente.
+    // Desmonta el componente mediante
+    // su ComponentScope.
     const dispose = () => {
-      scope.stop();
+      scope.unmount();
     };
 
     return {

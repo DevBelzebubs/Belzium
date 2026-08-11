@@ -5,7 +5,7 @@ import { ApplicationContext } from "../di/applicationContext";
 import { effect } from "../reactive/effect";
 
 import type { RenderableComponent } from "../component/types";
-
+import { ComponentScope } from "../component/componentScope";
 import {
   TEXT_NODE,
   type ComponentConstructor,
@@ -26,7 +26,25 @@ function isComponentVNode(vnode: VNode): boolean {
 function isSameVNode(oldVNode: VNode, newVNode: VNode): boolean {
   return oldVNode.type === newVNode.type && oldVNode.key === newVNode.key;
 }
+// Desmonta un componente y detiene toda la reactividad asociada a su scope
+function unmountComponent(vnode: VNode): void {
+  // Obtiene el estado interno del componente
+  const component = vnode.component;
 
+  // Si el componente no estaba montado,
+  // no hay nada que desmontar
+  if (!component) {
+    return;
+  }
+
+  // Detiene el efecto de render y
+  // todos los efectos registrados dentro del scope
+  component.scope.unmount();
+
+  // El VNode deja de conservar
+  // el estado del componente desmontado
+  vnode.component = undefined;
+}
 // Convierte un VNode en un nodo real del DOM
 export function createElement(
   vnode: VNode,
@@ -80,13 +98,15 @@ export function patch(
   // elimina el nodo anterior
   if (!newVNode) {
     if (oldVNode) {
+      // Los componentes deben detener su reactividad antes de eliminar su nodo del DOM
+      if (isComponentVNode(oldVNode)) {
+        unmountComponent(oldVNode);
+      }
       const oldNode = container.childNodes[index];
-
       if (oldNode) {
         container.removeChild(oldNode);
       }
     }
-
     return null;
   }
 
@@ -103,6 +123,11 @@ export function patch(
   // Si los VNodes representan entidades diferentes,
   // reemplaza completamente el nodo
   if (!isSameVNode(oldVNode, newVNode)) {
+    // Si el VNode anterior representa un componente,
+    // detenemos su ciclo de vida antes de reemplazarlo
+    if (isComponentVNode(oldVNode)) {
+      unmountComponent(oldVNode);
+    }
     const oldNode = container.childNodes[index];
 
     const newNode = createElement(newVNode, context);
@@ -353,7 +378,17 @@ function patchKeyedChildren(
     }
 
     // Parchea el VNode existente
-    const patchedNode = patchNode(oldVNode, newChild, oldNode, context);
+    const currentIndex = Array.prototype.indexOf.call(
+      container.childNodes,
+      oldNode,
+    );
+    const patchedNode = patch(
+      oldVNode,
+      newChild,
+      container,
+      currentIndex,
+      context,
+    );
 
     // Mueve el nodo existente
     // a su nueva posición
@@ -365,22 +400,7 @@ function patchKeyedChildren(
     }
   }
 
-  // Elimina nodos que ya no aparecen
-  for (const oldChild of oldChildren) {
-    if (
-      oldChild.key !== undefined &&
-      !newChildren.some((child) => child.key === oldChild.key)
-    ) {
-      const node = oldKeyToNode.get(oldChild.key);
-
-      if (node?.parentNode === container) {
-        container.removeChild(node);
-      }
-    }
-  }
 }
-
-// Monta un componente representado por un VNode
 // Monta un componente representado por un VNode
 export function mountComponent(
   vnode: VNode,
@@ -395,105 +415,132 @@ export function mountComponent(
   const instance = context.resolve(Component);
 
   // Crea las props reactivas del componente.
-  // El componente recibirá únicamente la vista
-  // de solo lectura.
+  // El componente recibirá únicamente
+  // la vista de solo lectura.
   const props = createProps((vnode.props ?? {}) as Record<string, unknown>);
 
   // Asigna las props públicas a la instancia
   instance.props = props.readonly;
+
+  // Conserva las props internas
+  // asociadas a la instancia.
   componentProps.set(instance, props);
+
+  // Crea el scope del componente.
+  //
+  // El scope será el dueño de todos
+  // los efectos creados durante su vida.
+  const scope = new ComponentScope();
+
   // Estado interno del componente
-  // que será conservado durante su vida
+  // que será conservado durante su vida.
   const componentState = {
     // Instancia resuelta mediante IoC
     instance,
-    // Props internas que pueden ser actualizadas
-    // por el renderer.
+
+    // Props internas actualizables
     props,
+
     // Árbol virtual generado por el componente
     subTree: null as VNode | null,
+
     // Nodo raíz real del componente
     element: null as Node | null,
-    // Efecto Pulse del componente
-    effect: undefined as ReturnType<typeof effect> | undefined,
+
+    // Scope responsable del lifecycle
+    // y de la reactividad
+    scope,
   };
-  // Ejecuta el render dentro de Pulse.
-  // Las dependencias utilizadas durante
-  // render() quedan asociadas al componente.
-  const renderEffect = effect(() => {
-    // Genera el nuevo árbol virtual
-    const nextVNode = instance.render();
 
-    // Primer render del componente
-    if (!componentState.subTree) {
-      const node = createElement(nextVNode, context);
+  // Crea el efecto dentro del ComponentScope.
+  //
+  // Esto es fundamental:
+  // scope.unmount() podrá detener
+  // este efecto posteriormente.
+  scope.run(() => {
+    effect(() => {
+      // Genera el nuevo árbol virtual
+      const nextVNode = instance.render();
 
-      // Inserta el nodo en el contenedor real
-      container.insertBefore(node, container.childNodes[index] ?? null);
+      // Primer render del componente
+      if (!componentState.subTree) {
+        const node = createElement(nextVNode, context);
 
-      // Guarda el nodo raíz
-      componentState.element = node;
-    } else {
-      // Obtiene el nodo padre real
-      // donde actualmente vive el componente
-      const parent = componentState.element?.parentNode;
+        // Inserta el nodo en el contenedor real
+        container.insertBefore(node, container.childNodes[index] ?? null);
 
-      if (!parent) {
-        return;
+        // Guarda el nodo raíz
+        componentState.element = node;
+      } else {
+        // Obtiene el nodo padre real
+        // donde actualmente vive el componente
+        const parent = componentState.element?.parentNode;
+
+        // Si ya no existe el padre,
+        // el componente fue desmontado
+        if (!parent) {
+          return;
+        }
+
+        // Busca la posición actual
+        // del componente dentro del padre
+        const currentIndex = Array.prototype.indexOf.call(
+          parent.childNodes,
+          componentState.element,
+        );
+
+        // Actualiza el árbol virtual
+        const patchedNode = patch(
+          componentState.subTree,
+          nextVNode,
+          parent,
+          currentIndex,
+          context,
+        );
+
+        // El nodo raíz pudo haber sido reemplazado
+        if (patchedNode) {
+          componentState.element = patchedNode;
+        }
       }
 
-      // Busca la posición actual del componente
-      // dentro de su contenedor real
-      const currentIndex = Array.prototype.indexOf.call(
-        parent.childNodes,
-        componentState.element,
-      );
-
-      // Actualiza el árbol virtual
-      const patchedNode = patch(
-        componentState.subTree,
-        nextVNode,
-        parent,
-        currentIndex,
-        context,
-      );
-
-      // El nodo raíz puede haber sido reemplazado
-      if (patchedNode) {
-        componentState.element = patchedNode;
-      }
-    }
-
-    // Guarda el árbol generado
-    // para la siguiente actualización
-    componentState.subTree = nextVNode;
+      // Guarda el árbol generado
+      // para la siguiente actualización
+      componentState.subTree = nextVNode;
+    });
   });
 
-  // Guarda el efecto en el estado interno
-  componentState.effect = renderEffect;
+  // El componente terminó su montaje inicial.
+  scope.mount();
 
   // Guarda el estado dentro del VNode.
-  // Esto permite reutilizar la instancia
-  // durante futuros patches.
+  //
+  // Esto permite reutilizar el mismo
+  // ComponentScope durante futuros patches.
   vnode.component = {
     instance: instance as RenderableComponent,
 
     subTree: componentState.subTree,
 
-    effect: renderEffect,
+    element: componentState.element,
+
+    scope,
   };
 
   // Recupera el nodo que acaba de montar
   const node = componentState.element;
 
   if (!node) {
+    // Si el render no produjo DOM,
+    // liberamos inmediatamente el scope.
+    scope.unmount();
+
     throw new Error(`Component did not render a DOM node`);
   }
 
   return node;
 }
 
-// Actualiza un componente que ya está montado
 // Actualiza un componente que ya está montado
 function updateComponent(
   oldVNode: VNode,
@@ -518,10 +565,9 @@ function updateComponent(
   }
 
   // Conserva el estado en el VNode nuevo
-  // para que el renderer pueda reutilizar
-  // la misma instancia en futuros patches.
   newVNode.component = component;
 
+  // Recupera las props reactivas
   const props = componentProps.get(component.instance);
 
   if (!props) {
@@ -529,17 +575,11 @@ function updateComponent(
   }
 
   // Actualiza las props manteniendo
-  // la identidad del objeto reactivo.
-  //
-  // NO reemplazamos instance.props.
-  // El componente conserva el mismo Proxy.
-  updateProps(
-    props.target,
-    (newVNode.props ?? {}) as Record<string, unknown>,
-  );
+  // la identidad del objeto reactivo
+  updateProps(props.target, (newVNode.props ?? {}) as Record<string, unknown>);
 
   // El Pulse del componente detectará
-  // los cambios de las props cuando estas
-  // sean utilizadas durante render().
+  // el cambio si las props participan
+  // en su render()
   return component.element ?? container.childNodes[index] ?? null;
 }
