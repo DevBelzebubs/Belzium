@@ -10,6 +10,20 @@ export type VNodeType =
     | string
     | typeof TEXT_NODE;
 
+export type VNodeKey =
+    | string
+    | number
+    | symbol;
+
+
+// Representa un nodo virtual del árbol
+export interface VNode {
+    type: VNodeType;
+    props: Record<string, unknown> | null;
+    children: VNode[];
+    text?: string;
+    key?: VNodeKey;
+}
 
 export interface VNode {
     // Tipo del nodo: tag del elemento o TEXT_NODE
@@ -29,10 +43,27 @@ export function h(
     children: VNode[] = []
 ): VNode {
 
+    const key =
+        props?.key as
+        VNodeKey | undefined;
+
+
+    const vnodeProps =
+        props
+            ? { ...props }
+            : null;
+
+
+    if (vnodeProps) {
+        delete vnodeProps.key;
+    }
+
+
     return {
         type,
-        props,
-        children
+        props: vnodeProps,
+        children,
+        key
     };
 }
 
