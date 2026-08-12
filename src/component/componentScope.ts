@@ -6,6 +6,35 @@ import { effectScope, type EffectScope } from "../reactive/effectScope";
 // Callback utilizado por los hooks del componente.
 type LifecycleHook = () => void;
 
+// Scope del componente que se está construyendo.
+// Los hooks onMounted/onUnmounted se registran
+// dentro del constructor de la instancia.
+let currentComponentScope: ComponentScope | undefined;
+
+// Establece el scope del componente en construcción.
+export function setCurrentComponentScope(
+  scope: ComponentScope | undefined,
+): void {
+  currentComponentScope = scope;
+}
+
+// Obtiene el scope del componente en construcción.
+export function getCurrentComponentScope(): ComponentScope | undefined {
+  return currentComponentScope;
+}
+
+// Registra un callback ejecutado cuando
+// el componente termina de montarse.
+export function onMounted(hook: () => void): void {
+  currentComponentScope?.onMount(hook);
+}
+
+// Registra un callback ejecutado antes
+// de desmontar el componente.
+export function onUnmounted(hook: () => void): void {
+  currentComponentScope?.onUnmount(hook);
+}
+
 // Estado del ciclo de vida del componente.
 export type ComponentLifecycleState = "created" | "mounted" | "unmounted";
 

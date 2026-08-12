@@ -54,6 +54,10 @@ export { createComponentProxy } from "./component/componentProxy";
 
 // Configuración declarativa del IoC.
 export { Configuration, Bean } from "./di/decorators/index";
+
+// Hooks de ciclo de vida de los componentes.
+export { onMounted, onUnmounted } from "./component/componentScope";
+
 // Application: punto de entrada del runtime.
 export {
     createApp,

@@ -8,8 +8,8 @@ import {
 import { ref } from "../src";
 import { RenderableComponent } from "../src/component/types";
 import { ApplicationContext } from "../src/di/applicationContext";
-import { h, text } from "../src/runtime/vnode";
-import { mountComponent } from "../src/runtime/vnodeRenderer";
+import { h, text, TEXT_NODE } from "../src/runtime/vnode";
+import { mountComponent, patch } from "../src/runtime/vnodeRenderer";
 
 
 describe("Component Reactivity", () => {
@@ -345,3 +345,99 @@ describe("Component Reactivity", () => {
     });
 
 });
+describe("Component lifecycle - reactividad después de unmount", () => {
+  it("no vuelve a ejecutar render cuando cambia un estado reactivo después del unmount", () => {
+    const calls: string[] = [];
+
+    class ReactiveComponent {
+      count = ref(0);
+
+      render() {
+        calls.push(`render:${this.count.value}`);
+
+        return {
+          type: "div",
+          props: {},
+          children: [
+            {
+              type: TEXT_NODE,
+              text: String(this.count.value),
+              children: [],
+            },
+          ],
+        };
+      }
+
+      onMounted() {
+        calls.push("mounted");
+      }
+
+      onUnmounted() {
+        calls.push("unmounted");
+      }
+    }
+
+    const context = new ApplicationContext();
+
+    context.register(ReactiveComponent, new ReactiveComponent());
+
+    const container = document.createElement("div");
+
+    const vnode = {
+      type: ReactiveComponent,
+      props: {},
+      children: [],
+    };
+    patch(null, vnode, container, 0, context);
+
+    expect(calls).toEqual([
+      "render:0",
+      "mounted",
+    ]);
+
+    const instance = context.resolve(ReactiveComponent);
+
+    // El componente está montado y debe reaccionar normalmente.
+    instance.count.value++;
+
+    expect(calls).toEqual([
+      "render:0",
+      "mounted",
+      "render:1",
+    ]);
+
+    // Desmontamos el componente.
+    patch(vnode, null, container, 0, context);
+
+    expect(calls).toEqual([
+      "render:0",
+      "mounted",
+      "render:1",
+      "unmounted",
+    ]);
+
+    expect(container.childNodes).toHaveLength(0);
+
+    // Cambiamos nuevamente el estado DESPUÉS del unmount.
+    instance.count.value++;
+
+    // El efecto del componente debe haber sido detenido.
+    expect(calls).toEqual([
+      "render:0",
+      "mounted",
+      "render:1",
+      "unmounted",
+    ]);
+
+    // Otro cambio tampoco debe reactivar el componente.
+    instance.count.value++;
+
+    expect(calls).toEqual([
+      "render:0",
+      "mounted",
+      "render:1",
+      "unmounted",
+    ]);
+  });
+});
+

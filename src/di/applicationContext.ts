@@ -60,8 +60,25 @@ export class ApplicationContext {
   // context.register(API_URL, "/api");
 
   // Internamente se transforma en un ValueProvider.
-  register<T>(token: InjectionToken<T>, value: T): void {
-    this.providers.set(token, { token, useValue: value });
+  register<T>(token: InjectionToken<T>, value: T): void;
+  // Registra una clase como ClassProvider.
+
+  // Ejemplo:
+
+  // context.register(UserService);
+  register<T>(target: new (...args: any[]) => T): void;
+  register<T>(
+    token: InjectionToken<T> | (new (...args: any[]) => T),
+    value?: T,
+  ): void {
+    // Con un solo argumento de tipo función,
+    // la clase se registra como ClassProvider.
+    if (typeof token === "function" && value === undefined) {
+      this.registerProvider({ token, useClass: token });
+      return;
+    }
+
+    this.providers.set(token as InjectionToken<T>, { token, useValue: value });
   }
 
   // Registra una definición de provider

@@ -17,4 +17,8 @@ export interface RenderableComponent<P extends Record<string, unknown> = Record<
     props?: Readonly<P>;
     // Genera el árbol virtual del componente
     render(): VNode;
+    // Se ejecuta después del montaje inicial
+    onMounted?(): void;
+    // Se ejecuta antes de desmontar el componente
+    onUnmounted?(): void;
 }

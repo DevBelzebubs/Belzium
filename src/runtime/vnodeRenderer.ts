@@ -5,7 +5,11 @@ import { ApplicationContext } from "../di/applicationContext";
 import { effect } from "../reactive/effect";
 
 import type { RenderableComponent } from "../component/types";
-import { ComponentScope } from "../component/componentScope";
+import {
+  ComponentScope,
+  getCurrentComponentScope,
+  setCurrentComponentScope,
+} from "../component/componentScope";
 import {
   TEXT_NODE,
   type ComponentConstructor,
@@ -28,21 +32,20 @@ function isSameVNode(oldVNode: VNode, newVNode: VNode): boolean {
 }
 // Desmonta un componente y detiene toda la reactividad asociada a su scope
 function unmountComponent(vnode: VNode): void {
-  // Obtiene el estado interno del componente
   const component = vnode.component;
+  if (!component) return;
 
-  // Si el componente no estaba montado,
-  // no hay nada que desmontar
-  if (!component) {
-    return;
-  }
+  // El hook de la instancia se ejecuta ANTES de
+  // eliminar el nodo para que siga teniendo
+  // acceso al DOM.
+  component.instance.onUnmounted?.();
 
-  // Detiene el efecto de render y
-  // todos los efectos registrados dentro del scope
-  component.scope.unmount();
+  // El hook se ejecuta ANTES de eliminar el nodo
+  // para que siga teniendo acceso al DOM.
+  component.scope?.unmount();
 
-  // El VNode deja de conservar
-  // el estado del componente desmontado
+  // Evita que el mismo componente sea desmontado
+  // dos veces accidentalmente.
   vnode.component = undefined;
 }
 // Convierte un VNode en un nodo real del DOM
@@ -98,15 +101,17 @@ export function patch(
   // elimina el nodo anterior
   if (!newVNode) {
     if (oldVNode) {
-      // Los componentes deben detener su reactividad antes de eliminar su nodo del DOM
+      const oldNode = container.childNodes[index];
+
       if (isComponentVNode(oldVNode)) {
         unmountComponent(oldVNode);
       }
-      const oldNode = container.childNodes[index];
+
       if (oldNode) {
         container.removeChild(oldNode);
       }
     }
+
     return null;
   }
 
@@ -123,12 +128,13 @@ export function patch(
   // Si los VNodes representan entidades diferentes,
   // reemplaza completamente el nodo
   if (!isSameVNode(oldVNode, newVNode)) {
-    // Si el VNode anterior representa un componente,
-    // detenemos su ciclo de vida antes de reemplazarlo
+    const oldNode = container.childNodes[index];
+
+    // El componente viejo debe desmontarse
+    // antes de reemplazar su nodo.
     if (isComponentVNode(oldVNode)) {
       unmountComponent(oldVNode);
     }
-    const oldNode = container.childNodes[index];
 
     const newNode = createElement(newVNode, context);
 
@@ -399,8 +405,8 @@ function patchKeyedChildren(
       );
     }
   }
-
 }
+
 // Monta un componente representado por un VNode
 export function mountComponent(
   vnode: VNode,
@@ -411,8 +417,23 @@ export function mountComponent(
   // Obtiene el constructor del componente
   const Component = vnode.type as ComponentConstructor;
 
+  // Crea el scope del componente.
+  //
+  // Se crea antes de resolver la instancia
+  // para que el constructor pueda registrar
+  // sus hooks de ciclo de vida.
+  const scope = new ComponentScope();
+
   // Resuelve la instancia mediante el IoC
-  const instance = context.resolve(Component);
+  // dentro del scope del componente.
+  const previousScope = getCurrentComponentScope();
+  setCurrentComponentScope(scope);
+  let instance: RenderableComponent;
+  try {
+    instance = context.resolve(Component);
+  } finally {
+    setCurrentComponentScope(previousScope);
+  }
 
   // Crea las props reactivas del componente.
   // El componente recibirá únicamente
@@ -425,12 +446,6 @@ export function mountComponent(
   // Conserva las props internas
   // asociadas a la instancia.
   componentProps.set(instance, props);
-
-  // Crea el scope del componente.
-  //
-  // El scope será el dueño de todos
-  // los efectos creados durante su vida.
-  const scope = new ComponentScope();
 
   // Estado interno del componente
   // que será conservado durante su vida.
@@ -512,6 +527,9 @@ export function mountComponent(
 
   // El componente terminó su montaje inicial.
   scope.mount();
+
+  // Hook de ciclo de vida de la instancia.
+  instance.onMounted?.();
 
   // Guarda el estado dentro del VNode.
   //
