@@ -3,7 +3,9 @@ import type { ComponentInstance, ComponentPublicInstance } from "./component";
 
 export function createComponentProxy( // Crea un proxy para la instancia de un componente
   instance: ComponentInstance,
+  options: { unwrap?: boolean } = {},
 ): ComponentPublicInstance {
+  const unwrap = options.unwrap === true;
   return new Proxy(
     {},
     {
@@ -17,7 +19,7 @@ export function createComponentProxy( // Crea un proxy para la instancia de un c
         } else {
           return undefined;
         }
-        return isRef(value) ? value.value : value;
+        return unwrap && isRef(value) ? value.value : value;
       },
       set(_, key, value) {
         // Intercepta la asignación de propiedades del proxy

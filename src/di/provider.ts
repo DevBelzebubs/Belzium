@@ -5,6 +5,10 @@ import { InjectionToken } from "./token";
 // Provider basado en una clase, applicationContext resuelve las dependencias y crea una instancia de useClass.
 export interface ClassProvider<T = unknown> {
 
+    // Alias de token: provide: Token
+    // registerProvider() normaliza ambos.
+    provide?: InjectionToken<T>;
+
     token: InjectionToken<T>;
 
     useClass:
@@ -34,6 +38,8 @@ export interface ClassProvider<T = unknown> {
  */
 export interface ValueProvider<T = unknown> {
 
+    provide?: InjectionToken<T>;
+
     token:
         InjectionToken<T>;
 
@@ -49,6 +55,8 @@ export interface ValueProvider<T = unknown> {
  * y las pasa como argumentos al factory.
  */
 export interface FactoryProvider<T = unknown> {
+
+    provide?: InjectionToken<T>;
 
     token:
         InjectionToken<T>;

@@ -40,6 +40,12 @@ function unmountComponent(vnode: VNode): void {
   // acceso al DOM.
   component.instance.onUnmounted?.();
 
+  // Desmonta recursivamente los componentes
+  // anidados en el subárbol del componente.
+  if (component.subTree) {
+    unmountNestedComponents(component.subTree);
+  }
+
   // El hook se ejecuta ANTES de eliminar el nodo
   // para que siga teniendo acceso al DOM.
   component.scope?.unmount();
@@ -47,6 +53,20 @@ function unmountComponent(vnode: VNode): void {
   // Evita que el mismo componente sea desmontado
   // dos veces accidentalmente.
   vnode.component = undefined;
+}
+
+// Desmonta los componentes anidados dentro
+// de un árbol virtual de forma recursiva
+function unmountNestedComponents(vnode: VNode): void {
+  if (isComponentVNode(vnode)) {
+    unmountComponent(vnode);
+
+    return;
+  }
+
+  for (const child of vnode.children) {
+    unmountNestedComponents(child);
+  }
 }
 // Convierte un VNode en un nodo real del DOM
 export function createElement(
@@ -405,6 +425,26 @@ function patchKeyedChildren(
       );
     }
   }
+
+  // Elimina los hijos keyed que ya
+  // no existen en el nuevo árbol
+  for (const [key, oldVNode] of oldKeyToVNode) {
+    if (newChildren.some((child) => child.key === key)) {
+      continue;
+    }
+
+    // Desmonta los componentes que desaparecen
+    if (isComponentVNode(oldVNode)) {
+      unmountComponent(oldVNode);
+    }
+
+    // Elimina el nodo real correspondiente
+    const oldNode = oldKeyToNode.get(key);
+
+    if (oldNode && oldNode.parentNode) {
+      oldNode.parentNode.removeChild(oldNode);
+    }
+  }
 }
 
 // Monta un componente representado por un VNode
@@ -447,6 +487,19 @@ export function mountComponent(
   // asociadas a la instancia.
   componentProps.set(instance, props);
 
+  // Ejecuta setup() si el componente lo define y
+  // expone el estado retornado en la instancia,
+  // de modo que render() pueda accederlo vía this.
+  const withSetup = instance as RenderableComponent & {
+    setup?: (
+      props?: Readonly<Record<string, unknown>>,
+    ) => Record<string, unknown> | void;
+  };
+  const setupResult = withSetup.setup?.(props.readonly);
+  if (setupResult && typeof setupResult === "object") {
+    Object.assign(instance, setupResult);
+  }
+
   // Estado interno del componente
   // que será conservado durante su vida.
   const componentState = {
@@ -474,54 +527,69 @@ export function mountComponent(
   // este efecto posteriormente.
   scope.run(() => {
     effect(() => {
-      // Genera el nuevo árbol virtual
-      const nextVNode = instance.render();
+      // Cada ejecución del efecto (incluidas las
+      // re-runs) corre dentro del scope del componente.
+      //
+      // Esto garantiza que los efectos creados
+      // durante el render (ej: watch) pertenezcan
+      // al scope y se detengan con el unmount.
+      scope.run(() => {
+        // Genera el nuevo árbol virtual
+        const nextVNode = instance.render();
 
-      // Primer render del componente
-      if (!componentState.subTree) {
-        const node = createElement(nextVNode, context);
+        // Primer render del componente
+        if (!componentState.subTree) {
+          const node = createElement(nextVNode, context);
 
-        // Inserta el nodo en el contenedor real
-        container.insertBefore(node, container.childNodes[index] ?? null);
+          // Inserta el nodo en el contenedor real
+          container.insertBefore(node, container.childNodes[index] ?? null);
 
-        // Guarda el nodo raíz
-        componentState.element = node;
-      } else {
-        // Obtiene el nodo padre real
-        // donde actualmente vive el componente
-        const parent = componentState.element?.parentNode;
+          // Guarda el nodo raíz
+          componentState.element = node;
+        } else {
+          // Obtiene el nodo padre real
+          // donde actualmente vive el componente
+          const parent = componentState.element?.parentNode;
 
-        // Si ya no existe el padre,
-        // el componente fue desmontado
-        if (!parent) {
-          return;
+          // Si ya no existe el padre,
+          // el componente fue desmontado
+          if (!parent) {
+            return;
+          }
+
+          // Busca la posición actual
+          // del componente dentro del padre
+          const currentIndex = Array.prototype.indexOf.call(
+            parent.childNodes,
+            componentState.element,
+          );
+
+          // Actualiza el árbol virtual
+          const patchedNode = patch(
+            componentState.subTree,
+            nextVNode,
+            parent,
+            currentIndex,
+            context,
+          );
+
+          // El nodo raíz pudo haber sido reemplazado
+          if (patchedNode) {
+            componentState.element = patchedNode;
+          }
         }
 
-        // Busca la posición actual
-        // del componente dentro del padre
-        const currentIndex = Array.prototype.indexOf.call(
-          parent.childNodes,
-          componentState.element,
-        );
+        // Guarda el árbol generado
+        // para la siguiente actualización
+        componentState.subTree = nextVNode;
 
-        // Actualiza el árbol virtual
-        const patchedNode = patch(
-          componentState.subTree,
-          nextVNode,
-          parent,
-          currentIndex,
-          context,
-        );
-
-        // El nodo raíz pudo haber sido reemplazado
-        if (patchedNode) {
-          componentState.element = patchedNode;
+        // Mantiene el subárbol vigente en el estado
+        // del VNode para poder desmontar los
+        // componentes anidados más recientes.
+        if (vnode.component) {
+          vnode.component.subTree = nextVNode;
         }
-      }
-
-      // Guarda el árbol generado
-      // para la siguiente actualización
-      componentState.subTree = nextVNode;
+      });
     });
   });
 

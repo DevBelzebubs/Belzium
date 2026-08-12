@@ -49,6 +49,7 @@ export interface VNodeComponentState {
   // Árbol virtual generado por el componente
   subTree: VNode | null;
 
+  element: Node | null;
   // Efecto Pulse asociado al componente
   scope: ComponentScope;
 }

@@ -66,3 +66,11 @@ export {
 export type {
     BelziumApplication,
 } from "./runtime/application";
+export {
+  provide,
+  inject,
+} from "./component/provideInject";
+
+export type {
+  InjectionKey,
+} from "./component/provideInject";

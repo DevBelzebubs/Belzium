@@ -67,14 +67,33 @@ export class ApplicationContext {
 
   // context.register(UserService);
   register<T>(target: new (...args: any[]) => T): void;
+  // Registra una clase junto a su implementación.
+
+  // Ejemplo:
+
+  // context.register(TestComponent, TestComponent);
+  register<T>(
+    token: new (...args: any[]) => T,
+    implementation: new (...args: any[]) => T,
+  ): void;
   register<T>(
     token: InjectionToken<T> | (new (...args: any[]) => T),
-    value?: T,
+    value?: T | (new (...args: any[]) => T),
   ): void {
     // Con un solo argumento de tipo función,
     // la clase se registra como ClassProvider.
     if (typeof token === "function" && value === undefined) {
       this.registerProvider({ token, useClass: token });
+      return;
+    }
+
+    // Si el valor es una clase, se registra
+    // como implementación de ClassProvider.
+    if (typeof value === "function") {
+      this.registerProvider({
+        token: token as InjectionToken<T>,
+        useClass: value as new (...args: any[]) => T,
+      });
       return;
     }
 
@@ -88,7 +107,9 @@ export class ApplicationContext {
   //     useClass: UserService
   // });
   registerProvider<T>(provider: Provider<T>): void {
-    this.providers.set(provider.token, provider);
+    const maybe = provider as Provider<T> & { provide?: InjectionToken<T> };
+    const token = (maybe.provide ?? provider.token) as InjectionToken<T>;
+    this.providers.set(token, { ...provider, token } as Provider<T>);
   }
 
   // =========================================================

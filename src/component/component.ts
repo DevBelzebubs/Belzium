@@ -35,9 +35,7 @@ export function createComponentInstance(
   parent: ComponentInstance | null = null,
 ): ComponentInstance {
   // Crea una instancia de un componente
-  const provides = parent
-    ? Object.create(parent.provides)
-    : Object.create(null);
+  const provides = new Map<InjectionKey, unknown>();
   const instance = {
     type,
     props,
@@ -48,23 +46,29 @@ export function createComponentInstance(
     provides,
   };
   instance.emit = createEmit(instance);
-  instance.proxy = createComponentProxy(instance);
+  instance.proxy = createComponentProxy(instance, { unwrap: true });
   return instance;
 }
 export function setupComponent(instance: ComponentInstance) {
   // Configura un componente
-  const setup = instance.type.setup;
+  const setup =
+    instance.type.setup ??
+    (instance.type as { prototype?: { setup?: typeof instance.type.setup } })
+      .prototype?.setup;
   if (!setup) {
     return;
   }
+  const previousInstance = getCurrentInstance();
   setCurrentInstance(instance);
   try {
-    const setupResult = setup(instance.props, { emit: instance.emit });
+    const setupResult = setup(instance.props, {
+      emit: instance.emit,
+    });
     if (setupResult) {
       instance.setupState = setupResult;
     }
   } finally {
-    setCurrentInstance(null);
+    setCurrentInstance(previousInstance);
   }
 }
 function createEmit(instance: ComponentInstance): EmitFn {
@@ -82,26 +86,32 @@ export function getCurrentInstance() {
   //Instancia del componente
   return currentInstance;
 }
-export function provide<T>(key: InjectionKey<T>, value: T) {
+export function provide<T>(key: InjectionKey<T> | string, value: T): void {
   // Proporciona un valor a los componentes descendientes
   const instance = getCurrentInstance();
   if (!instance) {
-    return;
+    throw new Error("provide() can only be used inside a component setup()");
   }
-  instance.provides[key] = value;
+  instance.provides.set(key, value);
 }
 export function inject<T>(
-  key: InjectionKey<T>,
+  key: InjectionKey<T> | string,
   defaultValue?: T,
 ): T | undefined {
   // Inyecta un valor proporcionado por un componente ancestro, o el valor por defecto si no existe
   const instance = getCurrentInstance();
   if (!instance) {
-    return defaultValue;
+    throw new Error("inject() can only be used inside a component setup()");
   }
 
-  if (key in instance.provides) {
-    return instance.provides[key] as T;
+  // Recorre la cadena de padres; funciona incluso si el padre
+  // se asigna después de createComponentInstance().
+  let current: ComponentInstance | null = instance;
+  while (current) {
+    if (current.provides.has(key)) {
+      return current.provides.get(key) as T;
+    }
+    current = current.parent;
   }
 
   return defaultValue;

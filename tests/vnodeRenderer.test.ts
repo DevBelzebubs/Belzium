@@ -3,7 +3,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createElement, patch } from "../src/runtime/vnodeRenderer";
 import { h, text } from "../src/runtime/vnode";
-import { Component, onMounted, onUnmounted, ref } from "../src";
+import { Component, onMounted, onUnmounted, ref, watch } from "../src";
 import { ApplicationContext } from "../src/di/applicationContext";
 
 it("should preserve keyed nodes when their order changes", () => {
@@ -229,9 +229,7 @@ describe("Component lifecycle", () => {
       }
 
       render() {
-        return h("div", null, [
-          text("Hello"),
-        ]);
+        return h("div", null, [text("Hello")]);
       }
     }
 
@@ -239,17 +237,9 @@ describe("Component lifecycle", () => {
 
     const vnode = h(TestComponent);
 
-    patch(
-      null,
-      vnode,
-      container,
-      0,
-      context,
-    );
+    patch(null, vnode, container, 0, context);
 
-    expect(container.innerHTML).toBe(
-      "<div>Hello</div>",
-    );
+    expect(container.innerHTML).toBe("<div>Hello</div>");
 
     expect(mounted).toHaveBeenCalledTimes(1);
   });
@@ -266,9 +256,7 @@ describe("Component lifecycle", () => {
       }
 
       render() {
-        return h("div", null, [
-          text(state.value),
-        ]);
+        return h("div", null, [text(state.value)]);
       }
     }
 
@@ -276,21 +264,13 @@ describe("Component lifecycle", () => {
 
     const vnode = h(TestComponent);
 
-    patch(
-      null,
-      vnode,
-      container,
-      0,
-      context,
-    );
+    patch(null, vnode, container, 0, context);
 
     expect(mounted).toHaveBeenCalledTimes(1);
 
     state.value = "B";
 
-    expect(container.innerHTML).toBe(
-      "<div>B</div>",
-    );
+    expect(container.innerHTML).toBe("<div>B</div>");
 
     expect(mounted).toHaveBeenCalledTimes(1);
   });
@@ -305,9 +285,7 @@ describe("Component lifecycle", () => {
       }
 
       render() {
-        return h("div", null, [
-          text("Hello"),
-        ]);
+        return h("div", null, [text("Hello")]);
       }
     }
 
@@ -315,19 +293,11 @@ describe("Component lifecycle", () => {
 
     const vnode = h(TestComponent);
 
-    patch(
-      null,
-      vnode,
-      container,
-      0,
-      context,
-    );
+    patch(null, vnode, container, 0, context);
 
     expect(unmounted).not.toHaveBeenCalled();
 
-    expect(container.innerHTML).toBe(
-      "<div>Hello</div>",
-    );
+    expect(container.innerHTML).toBe("<div>Hello</div>");
   });
 
   it("ejecuta onUnmounted al desmontar el componente", () => {
@@ -340,9 +310,7 @@ describe("Component lifecycle", () => {
       }
 
       render() {
-        return h("div", null, [
-          text("Hello"),
-        ]);
+        return h("div", null, [text("Hello")]);
       }
     }
 
@@ -350,23 +318,11 @@ describe("Component lifecycle", () => {
 
     const vnode = h(TestComponent);
 
-    patch(
-      null,
-      vnode,
-      container,
-      0,
-      context,
-    );
+    patch(null, vnode, container, 0, context);
 
     expect(unmounted).not.toHaveBeenCalled();
 
-    patch(
-      vnode,
-      null,
-      container,
-      0,
-      context,
-    );
+    patch(vnode, null, container, 0, context);
 
     expect(container.innerHTML).toBe("");
 
@@ -391,30 +347,12 @@ describe("Component lifecycle", () => {
 
     const vnode = h(TestComponent);
 
-    patch(
-      null,
-      vnode,
-      container,
-      0,
-      context,
-    );
+    patch(null, vnode, container, 0, context);
 
-    patch(
-      vnode,
-      null,
-      container,
-      0,
-      context,
-    );
+    patch(vnode, null, container, 0, context);
 
     // Intentamos desmontar nuevamente
-    patch(
-      vnode,
-      null,
-      container,
-      0,
-      context,
-    );
+    patch(vnode, null, container, 0, context);
 
     expect(unmounted).toHaveBeenCalledTimes(1);
   });
@@ -429,18 +367,14 @@ describe("Component lifecycle", () => {
       }
 
       render() {
-        return h("div", null, [
-          text("First"),
-        ]);
+        return h("div", null, [text("First")]);
       }
     }
 
     @Component()
     class SecondComponent {
       render() {
-        return h("div", null, [
-          text("Second"),
-        ]);
+        return h("div", null, [text("Second")]);
       }
     }
 
@@ -449,31 +383,15 @@ describe("Component lifecycle", () => {
 
     let vnode = h(FirstComponent);
 
-    patch(
-      null,
-      vnode,
-      container,
-      0,
-      context,
-    );
+    patch(null, vnode, container, 0, context);
 
-    expect(container.innerHTML).toBe(
-      "<div>First</div>",
-    );
+    expect(container.innerHTML).toBe("<div>First</div>");
 
     const nextVNode = h(SecondComponent);
 
-    patch(
-      vnode,
-      nextVNode,
-      container,
-      0,
-      context,
-    );
+    patch(vnode, nextVNode, container, 0, context);
 
-    expect(container.innerHTML).toBe(
-      "<div>Second</div>",
-    );
+    expect(container.innerHTML).toBe("<div>Second</div>");
 
     expect(unmounted).toHaveBeenCalledTimes(1);
 
@@ -491,11 +409,7 @@ describe("Component lifecycle", () => {
       }
 
       render() {
-        return h(
-          "div",
-          null,
-          [text("A")],
-        );
+        return h("div", null, [text("A")]);
       }
     }
 
@@ -506,54 +420,30 @@ describe("Component lifecycle", () => {
       }
 
       render() {
-        return h(
-          "div",
-          null,
-          [text("B")],
-        );
+        return h("div", null, [text("B")]);
       }
     }
 
     context.register(ComponentA);
     context.register(ComponentB);
 
-    const firstVNode = h(
-      "section",
-      null,
-      [
-        h(ComponentA, { key: "a" }),
-        h(ComponentB, { key: "b" }),
-      ],
-    );
+    const firstVNode = h("section", null, [
+      h(ComponentA, { key: "a" }),
+      h(ComponentB, { key: "b" }),
+    ]);
 
-    patch(
-      null,
-      firstVNode,
-      container,
-      0,
-      context,
-    );
+    patch(null, firstVNode, container, 0, context);
 
     expect(container.innerHTML).toBe(
       "<section><div>A</div><div>B</div></section>",
     );
 
-    const secondVNode = h(
-      "section",
-      null,
-      [
-        h(ComponentB, { key: "b" }),
-        h(ComponentA, { key: "a" }),
-      ],
-    );
+    const secondVNode = h("section", null, [
+      h(ComponentB, { key: "b" }),
+      h(ComponentA, { key: "a" }),
+    ]);
 
-    patch(
-      firstVNode,
-      secondVNode,
-      container,
-      0,
-      context,
-    );
+    patch(firstVNode, secondVNode, container, 0, context);
 
     expect(container.innerHTML).toBe(
       "<section><div>B</div><div>A</div></section>",
@@ -575,9 +465,7 @@ describe("Component lifecycle", () => {
       }
 
       render() {
-        return h("div", null, [
-          text("Hello"),
-        ]);
+        return h("div", null, [text("Hello")]);
       }
     }
 
@@ -585,23 +473,11 @@ describe("Component lifecycle", () => {
 
     const vnode = h(TestComponent);
 
-    patch(
-      null,
-      vnode,
-      container,
-      0,
-      context,
-    );
+    patch(null, vnode, container, 0, context);
 
     expect(container.firstChild).not.toBeNull();
 
-    patch(
-      vnode,
-      null,
-      container,
-      0,
-      context,
-    );
+    patch(vnode, null, container, 0, context);
 
     expect(nodeDuringUnmount).not.toBeNull();
     expect(container.firstChild).toBeNull();
@@ -629,18 +505,9 @@ describe("Component lifecycle", () => {
 
     const container = document.createElement("div");
 
-    patch(
-      null,
-      h(LifecycleComponent),
-      container,
-      0,
-      context,
-    );
+    patch(null, h(LifecycleComponent), container, 0, context);
 
-    expect(calls).toEqual([
-      "render",
-      "mounted",
-    ]);
+    expect(calls).toEqual(["render", "mounted"]);
   });
 
   it("no ejecuta onMounted nuevamente cuando el componente se actualiza", () => {
@@ -651,9 +518,7 @@ describe("Component lifecycle", () => {
       render() {
         calls.push("render");
 
-        return h("div", null, [
-          text(String(this.props?.value ?? "")),
-        ]);
+        return h("div", null, [text(String(this.props?.value ?? ""))]);
       }
 
       onMounted() {
@@ -874,4 +739,394 @@ describe("Component lifecycle", () => {
 
     expect(wasConnected).toBe(true);
   });
+});
+describe("Component runtime contract", () => {
+  it("mantiene el mismo componente durante mount → update → unmount", () => {
+    const context = new ApplicationContext();
+    const container = document.createElement("div");
+
+    let renders = 0;
+    let mounted = 0;
+    let unmounted = 0;
+
+    class TestComponent {
+      props!: Record<string, unknown>;
+
+      onMounted() {
+        mounted++;
+      }
+
+      onUnmounted() {
+        unmounted++;
+      }
+
+      render() {
+        renders++;
+
+        return h("div", null, [text(String(this.props.value))]);
+      }
+    }
+
+    context.register(TestComponent, TestComponent);
+
+    const oldVNode = h(TestComponent, {
+      value: "A",
+    });
+
+    patch(null, oldVNode, container, 0, context);
+
+    expect(renders).toBe(1);
+    expect(mounted).toBe(1);
+    expect(unmounted).toBe(0);
+
+    const newVNode = h(TestComponent, {
+      value: "B",
+    });
+
+    patch(oldVNode, newVNode, container, 0, context);
+
+    expect(renders).toBe(2);
+    expect(mounted).toBe(1);
+    expect(unmounted).toBe(0);
+    expect(container.textContent).toBe("B");
+
+    patch(newVNode, null, container, 0, context);
+
+    expect(unmounted).toBe(1);
+    expect(container.childNodes).toHaveLength(0);
+  });
+
+  it("detiene la reactividad del componente después de desmontarlo", () => {
+    const context = new ApplicationContext();
+    const container = document.createElement("div");
+
+    const state = ref(0);
+
+    let renders = 0;
+
+    class TestComponent {
+      render() {
+        renders++;
+
+        return h("div", null, [text(String(state.value))]);
+      }
+    }
+
+    context.register(TestComponent, TestComponent);
+
+    const vnode = h(TestComponent);
+
+    patch(null, vnode, container, 0, context);
+
+    expect(renders).toBe(1);
+    expect(container.textContent).toBe("0");
+
+    state.value = 1;
+
+    expect(renders).toBe(2);
+    expect(container.textContent).toBe("1");
+
+    patch(vnode, null, container, 0, context);
+
+    expect(container.childNodes).toHaveLength(0);
+
+    state.value = 2;
+
+    expect(renders).toBe(2);
+  });
+
+  it("no desmonta un componente keyed cuando solamente cambia de posición", () => {
+    const context = new ApplicationContext();
+    const container = document.createElement("div");
+
+    let mountedA = 0;
+    let unmountedA = 0;
+
+    class ComponentA {
+      onMounted() {
+        mountedA++;
+      }
+
+      onUnmounted() {
+        unmountedA++;
+      }
+
+      render() {
+        return h("span", null, [text("A")]);
+      }
+    }
+
+    class ComponentB {
+      render() {
+        return h("span", null, [text("B")]);
+      }
+    }
+
+    context.register(ComponentA, ComponentA);
+    context.register(ComponentB, ComponentB);
+
+    const oldVNode = h("div", null, [
+      h(ComponentA, { key: "a" }),
+      h(ComponentB, { key: "b" }),
+    ]);
+
+    patch(null, oldVNode, container, 0, context);
+
+    expect(mountedA).toBe(1);
+    expect(unmountedA).toBe(0);
+
+    const newVNode = h("div", null, [
+      h(ComponentB, { key: "b" }),
+      h(ComponentA, { key: "a" }),
+    ]);
+
+    patch(oldVNode, newVNode, container, 0, context);
+
+    expect(container.textContent).toBe("BA");
+    expect(mountedA).toBe(1);
+    expect(unmountedA).toBe(0);
+  });
+
+  it("desmonta un componente keyed cuando desaparece", () => {
+    const context = new ApplicationContext();
+    const container = document.createElement("div");
+
+    let unmounted = 0;
+
+    class TestComponent {
+      onUnmounted() {
+        unmounted++;
+      }
+
+      render() {
+        return h("span", null, [text("A")]);
+      }
+    }
+
+    context.register(TestComponent, TestComponent);
+
+    const oldVNode = h("div", null, [
+      h(TestComponent, {
+        key: "component",
+      }),
+    ]);
+
+    patch(null, oldVNode, container, 0, context);
+
+    const newVNode = h("div");
+
+    patch(oldVNode, newVNode, container, 0, context);
+
+    expect(unmounted).toBe(1);
+    expect(container.textContent).toBe("");
+  });
+
+  it("desmonta el componente anterior cuando cambia su identidad", () => {
+    const context = new ApplicationContext();
+    const container = document.createElement("div");
+
+    let unmountedA = 0;
+
+    class ComponentA {
+      onUnmounted() {
+        unmountedA++;
+      }
+
+      render() {
+        return h("span", null, [text("A")]);
+      }
+    }
+
+    class ComponentB {
+      render() {
+        return h("span", null, [text("B")]);
+      }
+    }
+
+    context.register(ComponentA, ComponentA);
+    context.register(ComponentB, ComponentB);
+
+    const oldVNode = h(ComponentA);
+
+    patch(null, oldVNode, container, 0, context);
+
+    const newVNode = h(ComponentB);
+
+    patch(oldVNode, newVNode, container, 0, context);
+
+    expect(unmountedA).toBe(1);
+    expect(container.textContent).toBe("B");
+  });
+
+  it("desmonta correctamente componentes anidados", () => {
+    const context = new ApplicationContext();
+    const container = document.createElement("div");
+
+    const calls: string[] = [];
+
+    class Child {
+      onMounted() {
+        calls.push("child-mounted");
+      }
+
+      onUnmounted() {
+        calls.push("child-unmounted");
+      }
+
+      render() {
+        return h("span", null, [text("child")]);
+      }
+    }
+
+    class Parent {
+      onMounted() {
+        calls.push("parent-mounted");
+      }
+
+      onUnmounted() {
+        calls.push("parent-unmounted");
+      }
+
+      render() {
+        return h("div", null, [h(Child)]);
+      }
+    }
+
+    context.register(Child, Child);
+    context.register(Parent, Parent);
+
+    const vnode = h(Parent);
+
+    patch(null, vnode, container, 0, context);
+
+    expect(calls).toEqual(["child-mounted", "parent-mounted"]);
+
+    patch(vnode, null, container, 0, context);
+
+    expect(calls).toContain("child-unmounted");
+    expect(calls).toContain("parent-unmounted");
+
+    expect(calls.filter((call) => call === "child-unmounted")).toHaveLength(1);
+
+    expect(calls.filter((call) => call === "parent-unmounted")).toHaveLength(1);
+
+    expect(container.childNodes).toHaveLength(0);
+  });
+
+  it("detiene watchers y efectos creados durante la vida del componente", () => {
+    const context = new ApplicationContext();
+    const container = document.createElement("div");
+
+    const state = ref(0);
+
+    let renders = 0;
+    let watcherCalls = 0;
+
+    class TestComponent {
+      render() {
+        renders++;
+
+        watch(
+          () => state.value,
+          () => {
+            watcherCalls++;
+          },
+        );
+
+        return h("div", null, [text(String(state.value))]);
+      }
+    }
+
+    context.register(TestComponent, TestComponent);
+
+    const vnode = h(TestComponent);
+
+    patch(null, vnode, container, 0, context);
+
+    expect(renders).toBe(1);
+
+    state.value = 1;
+
+    expect(renders).toBe(2);
+
+    patch(vnode, null, container, 0, context);
+
+    const rendersAfterUnmount = renders;
+    const watchersAfterUnmount = watcherCalls;
+
+    state.value = 2;
+
+    expect(renders).toBe(rendersAfterUnmount);
+    expect(watcherCalls).toBe(watchersAfterUnmount);
+  });
+  
+});
+describe("Component API integration", () => {
+  it("render puede acceder al estado retornado por setup mediante this", () => {
+    @Component()
+    class Counter {
+      setup() {
+        return {
+          count: ref(42),
+        };
+      }
+
+      render() {
+        return h("span", null, [
+          text(String(this.count.value)),
+        ]);
+      }
+    }
+
+    const context = new ApplicationContext();
+    context.registerProvider({
+      provide: Counter,
+      useClass: Counter,
+    });
+
+    const vnode = h(Counter);
+    const container = document.createElement("div");
+
+    patch(null, vnode, container, 0, context);
+
+    expect(container.textContent).toBe("42");
+  });
+  it("actualiza el render cuando cambia un ref retornado por setup", () => {
+  let count!: Ref<number>;
+
+  @Component()
+  class Counter {
+    setup() {
+      count = ref(0);
+
+      return {
+        count,
+      };
+    }
+
+    render() {
+      return h("span", null, [
+        text(String(this.count.value)),
+      ]);
+    }
+  }
+
+  const context = new ApplicationContext();
+
+  context.registerProvider({
+    provide: Counter,
+    useClass: Counter,
+  });
+
+  const vnode = h(Counter);
+  const container = document.createElement("div");
+
+  patch(null, vnode, container, 0, context);
+
+  expect(container.textContent).toBe("0");
+
+  count.value = 10;
+
+  expect(container.textContent).toBe("10");
+});
 });
