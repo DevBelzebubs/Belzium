@@ -100,3 +100,13 @@ export {
 export type {
   Output,
 } from "./component/output";
+
+// Inputs: props reactivas recibidas del componente padre.
+export {
+  input,
+  isInput,
+} from "./component/input";
+
+export type {
+  Input,
+} from "./component/input";

@@ -21,6 +21,8 @@ import {
 } from "./vnode";
 import { ComponentProps, createProps, updateProps } from "../component/props";
 import { isOutput } from "../component/output";
+import { isInput, type Input } from "../component/input";
+import { toRaw } from "../reactive/reactiveContext";
 const componentProps = new WeakMap<
   RenderableComponent,
   ComponentProps<Record<string, unknown>>
@@ -569,6 +571,19 @@ export function mountComponent(
   }
   instanceOutputs.set(instance, disposers);
 
+  // Conecta los inputs declarados en la instancia
+  // con los valores que el padre pasa como props.
+  //
+  // Se leen las props crudas (toRaw) para no
+  // registrar dependencias en el efecto del padre.
+  const rawProps = toRaw(props.readonly);
+  for (const key of Object.keys(instance)) {
+    const candidate = (instance as unknown as Record<string, unknown>)[key];
+    if (isInput(candidate)) {
+      (candidate as Input<unknown>).value = rawProps[key];
+    }
+  }
+
   // Expone las props como propiedades directas
   // de la instancia (ej: this.value) mediante
   // getters que leen de las props reactivas.
@@ -748,6 +763,19 @@ function updateComponent(
   // Actualiza las props manteniendo
   // la identidad del objeto reactivo
   updateProps(props.target, (newVNode.props ?? {}) as Record<string, unknown>);
+
+  // Refleja los nuevos valores en los inputs
+  // declarados en la instancia. El ref interno
+  // del input disparará el render del hijo.
+  const rawProps = toRaw(props.target);
+  for (const key of Object.keys(component.instance)) {
+    const candidate = (component.instance as unknown as Record<string, unknown>)[
+      key
+    ];
+    if (isInput(candidate)) {
+      (candidate as Input<unknown>).value = rawProps[key];
+    }
+  }
 
   // El Pulse del componente detectará
   // el cambio si las props participan
