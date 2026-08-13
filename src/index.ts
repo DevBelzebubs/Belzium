@@ -90,3 +90,13 @@ export type {
   Slot,
   Slots,
 } from "./component/slots";
+
+// Outputs: emisión de eventos hacia el componente padre.
+export {
+  output,
+  isOutput,
+} from "./component/output";
+
+export type {
+  Output,
+} from "./component/output";

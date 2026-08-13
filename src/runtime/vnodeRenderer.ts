@@ -20,10 +20,15 @@ import {
   type VNodeKey,
 } from "./vnode";
 import { ComponentProps, createProps, updateProps } from "../component/props";
+import { isOutput } from "../component/output";
 const componentProps = new WeakMap<
   RenderableComponent,
   ComponentProps<Record<string, unknown>>
 >();
+
+// Suscripciones de outputs de una instancia.
+// Se almacenan para poder cancelarlas al desmontar.
+const instanceOutputs = new WeakMap<object, Array<() => void>>();
 // Determina si un VNode representa un componente
 function isComponentVNode(vnode: VNode): boolean {
   return typeof vnode.type === "function";
@@ -37,6 +42,17 @@ function isSameVNode(oldVNode: VNode, newVNode: VNode): boolean {
 function unmountComponent(vnode: VNode): void {
   const component = vnode.component;
   if (!component) return;
+
+  // Cancela las suscripciones de los outputs ANTES
+  // del hook de la instancia para que un emit()
+  // durante onUnmounted no llegue al padre.
+  const disposers = instanceOutputs.get(component.instance);
+  if (disposers) {
+    for (const dispose of disposers) {
+      dispose();
+    }
+    instanceOutputs.delete(component.instance);
+  }
 
   // El hook de la instancia se ejecuta ANTES de
   // eliminar el nodo para que siga teniendo
@@ -533,6 +549,40 @@ export function mountComponent(
   }
   if (setupResult && typeof setupResult === "object") {
     Object.assign(instance, setupResult);
+  }
+
+  // Conecta los outputs declarados en la instancia
+  // con los handlers que el padre pasa como props.
+  const disposers: Array<() => void> = [];
+  for (const key of Object.keys(instance)) {
+    const candidate = (instance as unknown as Record<string, unknown>)[key];
+    if (isOutput(candidate)) {
+      disposers.push(
+        candidate.subscribe((value: unknown) => {
+          const handler = props.readonly[key];
+          if (typeof handler === "function") {
+            (handler as (value: unknown) => void)(value);
+          }
+        }),
+      );
+    }
+  }
+  instanceOutputs.set(instance, disposers);
+
+  // Expone las props como propiedades directas
+  // de la instancia (ej: this.value) mediante
+  // getters que leen de las props reactivas.
+  //
+  // No se pisan las propiedades que la instancia
+  // ya posee: outputs, setupState, slots, props...
+  for (const key of Object.keys(props.readonly)) {
+    if (key in instance) {
+      continue;
+    }
+    Object.defineProperty(instance, key, {
+      get: () => props.readonly[key],
+      configurable: true,
+    });
   }
 
   // Estado interno del componente
