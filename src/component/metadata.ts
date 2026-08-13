@@ -28,3 +28,8 @@ export function getComponentMetadata(
         target
     );
 }
+export function isComponent(
+    target: new (...args: never[]) => object
+): boolean {
+    return getComponentMetadata(target) !== undefined;
+}

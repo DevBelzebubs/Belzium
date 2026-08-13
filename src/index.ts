@@ -48,12 +48,18 @@ export type {
 // Proxy público de una instancia.
 export { createComponentProxy } from "./component/componentProxy";
 
+// Metadatos de componentes.
+export { isComponent } from "./component/metadata";
+
 // ============================================================
 // DEPENDENCY INJECTION
 // ============================================================
 
 // Configuración declarativa del IoC.
 export { Configuration, Bean } from "./di/decorators/index";
+
+// Decorador UI para componentes.
+export { UI } from "./di/decorators/ui";
 
 // Hooks de ciclo de vida de los componentes.
 export { onMounted, onUnmounted } from "./component/componentScope";
@@ -74,3 +80,13 @@ export {
 export type {
   InjectionKey,
 } from "./component/provideInject";
+
+// Slots de un componente.
+export {
+  useSlots,
+} from "./component/slots";
+
+export type {
+  Slot,
+  Slots,
+} from "./component/slots";

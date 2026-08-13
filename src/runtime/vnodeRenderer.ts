@@ -4,7 +4,10 @@ import { ApplicationContext } from "../di/applicationContext";
 
 import { effect } from "../reactive/effect";
 
+import { setSlots, useSlots, type Slots } from "../component/slots";
+
 import type { RenderableComponent } from "../component/types";
+import { getComponentMetadata } from "../component/metadata";
 import {
   ComponentScope,
   getCurrentComponentScope,
@@ -487,6 +490,16 @@ export function mountComponent(
   // asociadas a la instancia.
   componentProps.set(instance, props);
 
+  // Expone la variante configurada en @UI
+  // (ej: @UI({ variants: { primary: {...} } }))
+  // según la prop `variant` recibida.
+  const uiVariants = getComponentMetadata(Component)?.variants;
+  const variantName = vnode.props?.variant;
+  if (uiVariants && variantName != null) {
+    (instance as RenderableComponent & { variant?: Record<string, unknown> })
+      .variant = uiVariants[String(variantName)];
+  }
+
   // Ejecuta setup() si el componente lo define y
   // expone el estado retornado en la instancia,
   // de modo que render() pueda accederlo vía this.
@@ -495,7 +508,29 @@ export function mountComponent(
       props?: Readonly<Record<string, unknown>>,
     ) => Record<string, unknown> | void;
   };
-  const setupResult = withSetup.setup?.(props.readonly);
+
+  // Construye los slots del componente:
+  // - default: los hijos del VNode del componente
+  // - nombrados: via la prop `slots` (funciones perezosas)
+  const slots: Slots = {
+    default: () => vnode.children,
+    ...((vnode.props?.slots ?? {}) as Slots),
+  };
+
+  // Expone los slots en la instancia para
+  // que render() pueda consumirlos vía this.slots.
+  (instance as RenderableComponent & { slots?: Slots }).slots = slots;
+  const previousSlots = useSlots();
+  const previousComponentScope = getCurrentComponentScope();
+  setSlots(slots);
+  setCurrentComponentScope(scope);
+  let setupResult: Record<string, unknown> | void;
+  try {
+    setupResult = withSetup.setup?.(props.readonly);
+  } finally {
+    setSlots(previousSlots);
+    setCurrentComponentScope(previousComponentScope);
+  }
   if (setupResult && typeof setupResult === "object") {
     Object.assign(instance, setupResult);
   }

@@ -79,6 +79,9 @@ export function h(
   };
 }
 
+// Alias de text: crea un VNode de texto
+export const createTextVNode = text;
+
 // Crea un VNode de texto
 export function text(value: string): VNode {
   return {

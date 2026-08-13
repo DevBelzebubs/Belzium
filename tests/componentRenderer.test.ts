@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect } from "vitest";
-import { Component, ref } from "../src";
+import { Component, ref, UI, onMounted, isComponent } from "../src";
 import { ComponentRenderer } from "../src/runtime/componentRenderer";
-import { h, text } from "../src/runtime/vnode";
+import { h, text, createTextVNode } from "../src/runtime/vnode";
 import { ApplicationContext } from "../src/di/applicationContext";
 import { ComponentScope } from "../src/component/componentScope";
+import { patch } from "../src/runtime/vnodeRenderer";
 
 describe("ComponentRenderer", () => {
   it("Deberia renderizar un componente", () => {
@@ -326,4 +327,271 @@ describe("ComponentRenderer", () => {
 
     mounted.dispose();
   });
+  it("renders a UI component", () => {
+  @UI()
+  class Button {
+    render() {
+      return h("button", null, [
+        createTextVNode("Click"),
+      ]);
+    }
+  }
+
+  const context = new ApplicationContext();
+
+  context.register(Button, new Button());
+
+  const container = document.createElement("div");
+
+  patch(
+    null,
+    h(Button),
+    container,
+    0,
+    context,
+  );
+
+  expect(container.textContent).toBe("Click");
+});
+it("supports props in a UI component", () => {
+  @UI()
+  class Button {
+    render() {
+      return h("button", null, [
+        createTextVNode(
+          String(this.props.label),
+        ),
+      ]);
+    }
+  }
+
+  const context = new ApplicationContext();
+
+  context.register(Button, new Button());
+
+  const container = document.createElement("div");
+
+  patch(
+    null,
+    h(Button, {
+      label: "Save",
+    }),
+    container,
+    0,
+    context,
+  );
+
+  expect(container.textContent).toBe("Save");
+});
+it("updates when reactive state changes", () => {
+  const counter = ref(0);
+
+  @UI()
+  class Counter {
+    render() {
+      return h("span", null, [
+        createTextVNode(
+          String(counter.value),
+        ),
+      ]);
+    }
+  }
+
+  const context = new ApplicationContext();
+
+  context.register(
+    Counter,
+    new Counter(),
+  );
+
+  const container = document.createElement("div");
+
+  patch(
+    null,
+    h(Counter),
+    container,
+    0,
+    context,
+  );
+
+  expect(container.textContent).toBe("0");
+
+  counter.value++;
+
+  expect(container.textContent).toBe("1");
+});
+it("supports setup in a UI component", () => {
+  @UI()
+  class Counter {
+    setup() {
+      const count = ref(5);
+
+      return {
+        count,
+      };
+    }
+
+    render() {
+      return h("span", null, [
+        createTextVNode(
+          String(this.count.value),
+        ),
+      ]);
+    }
+  }
+
+  const context = new ApplicationContext();
+
+  context.register(
+    Counter,
+    new Counter(),
+  );
+
+  const container = document.createElement("div");
+
+  patch(
+    null,
+    h(Counter),
+    container,
+    0,
+    context,
+  );
+
+  expect(container.textContent).toBe("5");
+});
+it("supports lifecycle hooks", () => {
+  let mounted = false;
+
+  @UI()
+  class TestComponent {
+    setup() {
+      onMounted(() => {
+        mounted = true;
+      });
+    }
+
+    render() {
+      return h("div");
+    }
+  }
+
+  const context = new ApplicationContext();
+
+  context.register(
+    TestComponent,
+    new TestComponent(),
+  );
+
+  const container = document.createElement("div");
+
+  patch(
+    null,
+    h(TestComponent),
+    container,
+    0,
+    context,
+  );
+
+  expect(mounted).toBe(true);
+});
+it("uses the same runtime as Component", () => {
+  @UI()
+  class Button {
+    render() {
+      return h("button");
+    }
+  }
+
+  expect(
+    isComponent(Button),
+  ).toBe(true);
+});
+it("applies UI variants", () => {
+  @UI({
+    variants: {
+      primary: {
+        class: "primary"
+      }
+    }
+  })
+  class Button {
+    render() {
+      return h(
+        "button",
+        {
+          class: this.variant.class
+        },
+        []
+      );
+    }
+  }
+
+  const context = new ApplicationContext();
+
+  context.register(Button, new Button());
+
+  const container = document.createElement("div");
+
+  patch(
+    null,
+    h(Button, {
+      variant: "primary"
+    }),
+    container,
+    0,
+    context
+  );
+
+  expect(
+    container.firstChild?.attributes.getNamedItem("class")?.value
+  ).toBe("primary");
+});
+it("renders named slots", () => {
+  @UI()
+  class Card {
+    render() {
+      return h("div", {}, [
+        h(
+          "header",
+          {},
+          this.slots.header?.() ?? []
+        ),
+
+        h(
+          "main",
+          {},
+          this.slots.default?.() ?? []
+        )
+      ]);
+    }
+  }
+
+  const context = new ApplicationContext();
+
+  context.register(Card, new Card());
+
+  const container = document.createElement("div");
+
+  patch(
+    null,
+    h(Card, {
+      slots: {
+        header: () => [
+          createTextVNode("Header")
+        ],
+
+        default: () => [
+          createTextVNode("Body")
+        ]
+      }
+    }),
+    container,
+    0,
+    context
+  );
+
+  expect(container.textContent).toBe(
+    "HeaderBody"
+  );
+});
 });

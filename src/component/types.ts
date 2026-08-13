@@ -3,6 +3,8 @@ import { VNode } from "../runtime/vnode";
 export interface ComponentOptions {
     // Selector que identifica el componente en el renderer
     selector: string;
+    // Variantes configuradas para el componente UI
+    variants?: Record<string, Record<string, unknown>>;
 }
 
 export interface ComponentMetadata {
@@ -10,6 +12,8 @@ export interface ComponentMetadata {
     type: new (...args: never[]) => object;
     // Selector que usa el renderer
     selector: string;
+    // Variantes configuradas para el componente UI
+    variants?: Record<string, Record<string, unknown>>;
 }
 // Contrato base de un componente renderizable
 export interface RenderableComponent<P extends Record<string, unknown> = Record<string, unknown>> {
