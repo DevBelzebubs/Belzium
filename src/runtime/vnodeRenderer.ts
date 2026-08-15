@@ -32,7 +32,9 @@ const componentProps = new WeakMap<
 // Se almacenan para poder cancelarlas al desmontar.
 const instanceOutputs = new WeakMap<object, Array<() => void>>();
 // Determina si un VNode representa un componente
-function isComponentVNode(vnode: VNode): boolean {
+function isComponentVNode(
+  vnode: VNode,
+): vnode is VNode & { type: ComponentConstructor } {
   return typeof vnode.type === "function";
 }
 
@@ -115,7 +117,7 @@ export function createElement(
   }
 
   // Crea el elemento según el tag del VNode
-  const element = document.createElement(vnode.type);
+  const element = document.createElement(vnode.type as string);
 
   // Aplica las props iniciales
   patchProps(element, null, vnode.props);
@@ -677,6 +679,12 @@ export function mountComponent(
           if (patchedNode) {
             componentState.element = patchedNode;
           }
+
+          // El componente terminó su actualización:
+          // se notifican los hooks de actualización
+          // del scope y de la instancia.
+          scope.update();
+          instance.onUpdated?.();
         }
 
         // Guarda el árbol generado

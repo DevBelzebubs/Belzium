@@ -51,6 +51,11 @@ export { createComponentProxy } from "./component/componentProxy";
 // Metadatos de componentes.
 export { isComponent } from "./component/metadata";
 
+export type {
+  ComponentOptions,
+  RenderableComponent,
+} from "./component/types";
+
 // ============================================================
 // DEPENDENCY INJECTION
 // ============================================================
@@ -62,7 +67,11 @@ export { Configuration, Bean } from "./di/decorators/index";
 export { UI } from "./di/decorators/ui";
 
 // Hooks de ciclo de vida de los componentes.
-export { onMounted, onUnmounted } from "./component/componentScope";
+export {
+  onMounted,
+  onUnmounted,
+  onUpdated,
+} from "./component/componentScope";
 
 // Application: punto de entrada del runtime.
 export {
@@ -110,3 +119,72 @@ export {
 export type {
   Input,
 } from "./component/input";
+
+// ============================================================
+// VNODES
+// ============================================================
+
+// Construcción de VNodes.
+export {
+  h,
+  text,
+  createTextVNode,
+  TEXT_NODE,
+  isSameVNode,
+} from "./runtime/vnode";
+
+export type {
+  VNode,
+  VNodeType,
+  VNodeKey,
+  VNodeComponentState,
+  ComponentConstructor,
+} from "./runtime/vnode";
+
+// ============================================================
+// STORES
+// ============================================================
+
+// Estado global reactivo (no-IoC).
+export {
+  Store,
+  useStore,
+  resetStores,
+  getStoreMetadata,
+  STORE_METADATA,
+} from "./store";
+
+export type {
+  StoreMetadata,
+} from "./store";
+
+// ============================================================
+// HOOKS
+// ============================================================
+
+// Estado y lógica atada al ciclo de vida del componente.
+export {
+  Hook,
+  useHook,
+  getHookMetadata,
+  HOOK_METADATA,
+} from "./component/hook";
+
+export type {
+  HookMetadata,
+} from "./component/hook";
+
+// ============================================================
+// DIRECTIVAS
+// ============================================================
+
+// Directivas personalizadas del template.
+export {
+  Directive,
+  getDirectiveMetadata,
+  DIRECTIVE_METADATA,
+} from "./component/directive";
+
+export type {
+  DirectiveMetadata,
+} from "./component/directive";

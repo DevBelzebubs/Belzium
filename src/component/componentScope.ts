@@ -29,6 +29,12 @@ export function onMounted(hook: () => void): void {
   currentComponentScope?.onMount(hook);
 }
 
+// Registra un callback ejecutado después
+// de cada actualización del componente.
+export function onUpdated(hook: () => void): void {
+  currentComponentScope?.onUpdate(hook);
+}
+
 // Registra un callback ejecutado antes
 // de desmontar el componente.
 export function onUnmounted(hook: () => void): void {

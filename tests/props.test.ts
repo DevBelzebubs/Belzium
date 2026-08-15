@@ -76,7 +76,7 @@ describe("Component Props", () => {
             }
         );
 
-        expect(props.readonly.age)
+        expect((props.readonly as Record<string, unknown>).age)
             .toBe(21);
     });
 

@@ -44,7 +44,7 @@ export function createProps<T extends Record<string, unknown>>(
 // Actualiza las props manteniendo
 // la identidad del objeto reactivo.
 export function updateProps<T extends Record<string, unknown>>(
-  target: T,
+  target: Record<string, unknown>,
   next: T,
 ): void {
   // Actualiza las props existentes

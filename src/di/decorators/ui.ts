@@ -1,4 +1,4 @@
-import { defineComponentMetadata } from "../../component/metadata";
+import { defineComponentMetadata, toKebabCase } from "../../component/metadata";
 import type { ComponentOptions } from "../../component/types";
 
 // @UI(): marca una clase como componente UI.
@@ -7,8 +7,8 @@ export function UI(options: ComponentOptions = {}) {
   return <T extends new (...args: never[]) => object>(target: T): T => {
     defineComponentMetadata(target, {
       type: target,
-      selector: options.selector,
-      variants: options.variants,
+      selector: options.selector ?? toKebabCase(target.name),
+      ...(options.variants !== undefined ? { variants: options.variants } : {}),
     });
 
     return target;

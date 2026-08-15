@@ -72,6 +72,13 @@ export class ComponentRenderer {
         // con el nuevo.
         patch(currentVNode, nextVNode, element, 0, this.context);
 
+        // A partir de la primera actualización se notifican
+        // los hooks de actualización (no en el montaje inicial).
+        if (currentVNode) {
+          scope.update();
+          instance.onUpdated?.();
+        }
+
         // Conserva el árbol actual.
         currentVNode = nextVNode;
       });
