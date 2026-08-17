@@ -9,6 +9,12 @@ import { ApplicationContext } from "../di/applicationContext";
 import { ComponentRenderer } from "./componentRenderer";
 
 import type { Constructor } from "../di/types";
+import type { RenderableComponent } from "../component/types";
+import {
+  ComponentScope,
+  getCurrentComponentScope,
+  setCurrentComponentScope,
+} from "../component/componentScope";
 
 // Representa una aplicación Belzium montada.
 export interface BelziumApplication {
@@ -23,7 +29,9 @@ export interface BelziumApplication {
 }
 
 // Crea una aplicación Belzium.
-export function createApp(rootComponent: Constructor): BelziumApplication {
+export function createApp(
+  rootComponent: Constructor<RenderableComponent>,
+): BelziumApplication {
   // Crea el contexto IoC raíz de la aplicación.
   const context = new ApplicationContext();
 
@@ -58,9 +66,19 @@ export function createApp(rootComponent: Constructor): BelziumApplication {
       // la misma aplicación.
       if (mountedElement) throw new Error(`Application is already mounted`);
 
-      // El componente raíz se resuelve
-      // mediante el ApplicationContext.
-      const instance = context.resolve(rootComponent);
+      // El componente raíz se resuelve mediante el ApplicationContext.
+      // Se resuelve dentro de un ComponentScope para que los hooks
+      // (ej: useHook()) llamados desde el constructor del componente
+      // raíz puedan enlazarse a un scope activo.
+      const previousScope = getCurrentComponentScope();
+      const rootScope = new ComponentScope();
+      setCurrentComponentScope(rootScope);
+      let instance: RenderableComponent;
+      try {
+        instance = context.resolve(rootComponent);
+      } finally {
+        setCurrentComponentScope(previousScope);
+      }
       const mounted = renderer.mount(rootComponent, instance, element);
 
       // Guarda el elemento montado.
