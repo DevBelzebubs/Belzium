@@ -1,14 +1,18 @@
 import { createComponentProxy } from "./componentProxy";
 import type { InjectionKey, Provides } from "./injection";
-import { defineComponentMetadata } from "./metadata";
+import { defineComponentMetadata, toKebabCase } from "./metadata";
 import { ComponentOptions } from "./types";
 
 export type EmitFn = (event: string, ...args: unknown[]) => void;
 export interface SetupContext {
   emit: EmitFn;
 }
+export type SetupFn = (
+  props: Record<string, unknown>,
+  context: SetupContext,
+) => Record<string, unknown> | void;
 export interface ComponentPublicInstance {
-  [key: string | symbol]: unknown;
+  [key: string | symbol]: any;
 }
 export interface ComponentInstance {
   // Instancia de un componente
@@ -21,13 +25,16 @@ export interface ComponentInstance {
   provides: Provides; // Valores proporcionados al componente, heredados del padre por cadena de prototipos
 }
 
-export interface Component {
-  // Definición de un componente
-  setup?: (
-    props: Record<string, unknown>,
-    context: SetupContext,
-  ) => Record<string, unknown> | void;
-}
+// Definición de un componente:
+// - un objeto con setup() (API de opciones)
+// - una clase constructora (la metadata vive en el prototype)
+export type Component =
+  | {
+      setup?: SetupFn;
+      // Permite pasar clases constructoras (la metadata vive en el prototype)
+      [key: string]: unknown;
+    }
+  | { new (...args: any[]): unknown };
 let currentInstance: ComponentInstance | null = null;
 export function createComponentInstance(
   type: Component,
@@ -51,10 +58,11 @@ export function createComponentInstance(
 }
 export function setupComponent(instance: ComponentInstance) {
   // Configura un componente
-  const setup =
-    instance.type.setup ??
-    (instance.type as { prototype?: { setup?: typeof instance.type.setup } })
-      .prototype?.setup;
+  const source = instance.type as {
+    setup?: SetupFn;
+    prototype?: { setup?: SetupFn };
+  };
+  const setup = source.setup ?? source.prototype?.setup;
   if (!setup) {
     return;
   }
@@ -121,7 +129,7 @@ function setCurrentInstance(instance: ComponentInstance | null) {
   currentInstance = instance;
 }
 export function Component(
-  options: ComponentOptions,
+  options?: ComponentOptions,
 ): <T extends new (...args: never[]) => object>(target: T) => T;
 
 // Implementación común de ambas formas del decorador.
@@ -130,7 +138,8 @@ export function Component(options: ComponentOptions = {}) {
     // Registra la metadata del componente.
     defineComponentMetadata(target, {
       type: target,
-      selector: options.selector,
+      selector: options.selector ?? toKebabCase(target.name),
+      ...(options.variants !== undefined ? { variants: options.variants } : {}),
     });
 
     return target;
