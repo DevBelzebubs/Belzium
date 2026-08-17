@@ -1,0 +1,35 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Belzium",
+  "scopeName": "source.bel",
+  "patterns": [
+    {
+      "include": "#directives"
+    },
+    {
+      "include": "source.tsx"
+    }
+  ],
+  "repository": {
+    "directives": {
+      "patterns": [
+        {
+          "name": "keyword.control.bel",
+          "match": "(?<=^|\\s|[{}>])@(?:if|else|for|switch|case|default)\\b"
+        },
+        {
+          "name": "entity.name.function.decorator",
+          "match": "(?<=^|\\s|[{}>])@[A-Za-z_$][\\w$-]*(?=\\s*\\()"
+        },
+        {
+          "name": "entity.name.type.bel",
+          "match": "(?<=^|\\s|[{}>])@[A-Za-z_$][\\w$-]*(?=\\s*(?:\\[[^\\n{}]*\\])?\\s*\\{)"
+        },
+        {
+          "name": "entity.name.tag.bel",
+          "match": "(?<=^|\\s|[{}>])@[A-Za-z_$][\\w$-]*"
+        }
+      ]
+    }
+  }
+}
