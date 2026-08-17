@@ -9,7 +9,7 @@ export const TEXT_NODE = Symbol("belzium:text");
 
 // Constructor de un componente Belzium
 export type ComponentConstructor = new (
-  ...args: never[]
+  ...args: any[]
 ) => RenderableComponent;
 
 // Tipo de un VNode:
