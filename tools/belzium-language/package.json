@@ -1,0 +1,79 @@
+{
+  "name": "belzium-language",
+  "displayName": "Belzium Language",
+  "description": "Soporte de lenguaje para .bel (Belzium): resaltado de sintaxis y bases de IntelliSense.",
+  "version": "0.1.0",
+  "publisher": "belzium",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:bel"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "bel",
+        "aliases": [
+          "Belzium",
+          "bel"
+        ],
+        "extensions": [
+          ".bel"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "bel",
+        "scopeName": "source.bel",
+        "path": "./syntaxes/bel.tmLanguage.json"
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "scopes": {
+          "keyword": [
+            "keyword.control.bel"
+          ],
+          "decorator": [
+            "entity.name.function.decorator"
+          ],
+          "type": [
+            "entity.name.type.bel"
+          ]
+        }
+      }
+    ],
+    "semanticTokenTypes": [
+      {
+        "id": "keyword",
+        "superType": "keyword",
+        "description": "Directivas de plantilla de Belzium (@if, @for, ...)."
+      },
+      {
+        "id": "decorator",
+        "superType": "function",
+        "description": "Decoradores de Belzium (@Component, @Store, ...)."
+      },
+      {
+        "id": "type",
+        "superType": "type",
+        "description": "Directivas personalizadas de Belzium."
+      }
+    ]
+  },
+  "scripts": {
+    "prebuild": "npm --prefix ../.. run build:types",
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "typecheck": "tsc --noEmit"
+  }
+}
