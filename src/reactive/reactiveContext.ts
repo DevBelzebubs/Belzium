@@ -1,5 +1,7 @@
 import { RAW } from "./reactive";
 
+import { isRef } from "./ref";
+
 type ReactiveFactory = <T extends object>(target: T) => T;
 // Usamos el patrón factory para crear objetos reactivos
 let reactiveFactory: ReactiveFactory;
@@ -14,6 +16,13 @@ export function toReactive<T>(value: T): T {
   if (typeof value !== "object" || value === null) {
     return value;
   }
+
+  // Los refs ya son reactivos y gestionan su propio seguimiento
+  // de dependencias; envolverlos en otro proxy rompe sus Sets internos.
+  if (isRef(value)) {
+    return value;
+  }
+
   return reactiveFactory(value as object) as T;
 }
 export function toRaw<T>(value: T): T {
