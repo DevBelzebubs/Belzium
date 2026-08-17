@@ -9,7 +9,7 @@ export interface ClassProvider<T = unknown> {
     // registerProvider() normaliza ambos.
     provide?: InjectionToken<T>;
 
-    token: InjectionToken<T>;
+    token?: InjectionToken<T>;
 
     useClass:
         new (...args: any[]) => T;
@@ -40,8 +40,7 @@ export interface ValueProvider<T = unknown> {
 
     provide?: InjectionToken<T>;
 
-    token:
-        InjectionToken<T>;
+    token?: InjectionToken<T>;
 
     useValue:
         T;
@@ -58,8 +57,7 @@ export interface FactoryProvider<T = unknown> {
 
     provide?: InjectionToken<T>;
 
-    token:
-        InjectionToken<T>;
+    token?: InjectionToken<T>;
 
     useFactory:
         (...args: any[]) => T;
