@@ -1,0 +1,25 @@
+@Component()
+export class Counter {
+  count = ref(0);
+  items = [1, 2, 3];
+
+  render() {
+    return (
+      <div>
+        <button onClick={() => this.count.value++}>
+          Count: {this.count.value}
+        </button>
+        @if (this.count.value >= 3) {
+          <p>Big</p>
+        } @else {
+          <p>Small</p>
+        }
+        <ul>
+          @for (n of this.items; n) {
+            <li>Item {n}</li>
+          }
+        </ul>
+      </div>
+    );
+  }
+}
