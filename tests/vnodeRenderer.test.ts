@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createElement, patch } from "../src/runtime/vnodeRenderer";
 import { h, text } from "../src/runtime/vnode";
 import { Component, onMounted, onUnmounted, ref, watch } from "../src";
+import type { Ref } from "../src";
 import { ApplicationContext } from "../src/di/applicationContext";
 
 it("should preserve keyed nodes when their order changes", () => {
@@ -190,7 +191,7 @@ it("detiene la reactividad de un componente al desmontarlo mediante patch", () =
 
   expect(component.scope.effectScope.isActive).toBe(true);
 
-  component.instance.count.value = 1;
+  (component.instance as unknown as { count: Ref<number> }).count.value = 1;
 
   expect(container.textContent).toBe("1");
 
@@ -202,7 +203,7 @@ it("detiene la reactividad de un componente al desmontarlo mediante patch", () =
   // Cambiar el estado después
   // del desmontaje no debe producir
   // ningún nuevo render.
-  component.instance.count.value = 2;
+  (component.instance as unknown as { count: Ref<number> }).count.value = 2;
 
   expect(container.textContent).toBe("");
 });
@@ -515,6 +516,8 @@ describe("Component lifecycle", () => {
 
     @Component({ selector: "lifecycle-component" })
     class LifecycleComponent {
+      props!: Record<string, unknown>;
+
       render() {
         calls.push("render");
 
@@ -1065,6 +1068,8 @@ describe("Component API integration", () => {
   it("render puede acceder al estado retornado por setup mediante this", () => {
     @Component()
     class Counter {
+      count!: Ref<number>;
+
       setup() {
         return {
           count: ref(42),
@@ -1096,6 +1101,8 @@ describe("Component API integration", () => {
 
   @Component()
   class Counter {
+    count!: Ref<number>;
+
     setup() {
       count = ref(0);
 

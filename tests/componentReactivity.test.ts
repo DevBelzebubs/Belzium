@@ -9,6 +9,7 @@ import { ref } from "../src";
 import { RenderableComponent } from "../src/component/types";
 import { ApplicationContext } from "../src/di/applicationContext";
 import { h, text, TEXT_NODE } from "../src/runtime/vnode";
+import type { VNode } from "../src/runtime/vnode";
 import { mountComponent, patch } from "../src/runtime/vnodeRenderer";
 
 
@@ -352,7 +353,7 @@ describe("Component lifecycle - reactividad después de unmount", () => {
     class ReactiveComponent {
       count = ref(0);
 
-      render() {
+      render(): VNode {
         calls.push(`render:${this.count.value}`);
 
         return {
@@ -361,6 +362,7 @@ describe("Component lifecycle - reactividad después de unmount", () => {
           children: [
             {
               type: TEXT_NODE,
+              props: null,
               text: String(this.count.value),
               children: [],
             },

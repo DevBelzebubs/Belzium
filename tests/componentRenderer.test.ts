@@ -2,6 +2,8 @@
 
 import { describe, it, expect } from "vitest";
 import { Component, ref, UI, onMounted, isComponent } from "../src";
+import type { Ref } from "../src";
+import type { Slots } from "../src/component/slots";
 import { ComponentRenderer } from "../src/runtime/componentRenderer";
 import { h, text, createTextVNode } from "../src/runtime/vnode";
 import { ApplicationContext } from "../src/di/applicationContext";
@@ -356,6 +358,8 @@ describe("ComponentRenderer", () => {
 it("supports props in a UI component", () => {
   @UI()
   class Button {
+    props!: Readonly<{ label?: string }>;
+
     render() {
       return h("button", null, [
         createTextVNode(
@@ -423,6 +427,8 @@ it("updates when reactive state changes", () => {
 it("supports setup in a UI component", () => {
   @UI()
   class Counter {
+    count!: Ref<number>;
+
     setup() {
       const count = ref(5);
 
@@ -515,6 +521,8 @@ it("applies UI variants", () => {
     }
   })
   class Button {
+    variant!: Record<string, unknown>;
+
     render() {
       return h(
         "button",
@@ -543,12 +551,14 @@ it("applies UI variants", () => {
   );
 
   expect(
-    container.firstChild?.attributes.getNamedItem("class")?.value
+    (container.firstChild as Element)?.attributes.getNamedItem("class")?.value
   ).toBe("primary");
 });
 it("renders named slots", () => {
   @UI()
   class Card {
+    slots!: Slots;
+
     render() {
       return h("div", {}, [
         h(
