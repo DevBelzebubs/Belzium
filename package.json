@@ -1,1 +1,21 @@
-{"name":"belzium","version":"0.0.0","private":true,"type":"module","scripts":{"test":"vitest run"},"devDependencies":{"jsdom":"^29.1.1","vitest":"^1.0.0"}}
+{
+  "name": "belzium",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build:types": "tsc -p tsconfig.types.json",
+    "build:language": "npm --prefix tools/belzium-language run build",
+    "typecheck:language": "tsc --noEmit -p tools/belzium-language"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.21.0",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.9.3",
+    "vitest": "^1.0.0"
+  }
+}

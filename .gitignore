@@ -1,1 +1,5 @@
 node_modules
+tests/compiler/.cache
+tools/belzium-language/dist
+tools/belzium-language/types
+*.vsix

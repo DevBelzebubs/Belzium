@@ -11,5 +11,6 @@
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true
   },
-  "include": ["src", "tests", "examples"]
+  "include": ["src", "tests", "examples", "tools/belzium-language/src"],
+  "exclude": ["tests/compiler/.cache"]
 }
