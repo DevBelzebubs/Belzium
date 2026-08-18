@@ -1,8 +1,8 @@
-# Belzium (Fase Pre-Alfa temprana)
+# Belzium (Alpha)
 
-Framework de frontend minimalista en TypeScript: **reactividad**, **componentes** y **DI** (inversión de control), sin dependencias de runtime.
+Framework frontend minimalista en TypeScript con compiler propio (`.bel`), reactividad, componentes, DI/IoC y extensión VSCode — cero dependencias de runtime.
 
-- [Español](#espa%C3%B1ol)
+- [Español](#español)
 - [English](#english)
 
 ---
@@ -16,72 +16,123 @@ Framework de frontend minimalista en TypeScript: **reactividad**, **componentes*
   - `ref()`: variables reactivas individuales con desempaquetado automático.
   - `computed()`: valores derivados con caché y recálculo perezoso.
   - `effect()`, `watch()`, `watchEffect()`: efectos que reaccionan a los cambios.
-  - `toRaw()`, `toReactive()`, `RAW`: conversión entre objetos crudos y reactivos.
+  - `toRaw()`, `toReactive()`: conversión entre objetos crudos y reactivos.
   - Scheduler con cola de jobs y deduplicación (`flush: "sync" | "pre"`).
 - **Componentes:**
-  - `createComponentInstance()`, `setupComponent()`: ciclo de vida de una instancia.
+  - `@Component()`, `@UI()`: decoradores para declarar componentes.
   - `setup(props, { emit })`: función de configuración de cada componente.
   - Proxy público con desempaquetado de `ref`.
   - `provide()` / `inject()`: valores compartidos entre ancestros y descendientes.
-  - `emit`: eventos hacia el componente padre (`onXxx`).
+  - `useSlots()`: acceso al contenido de slots.
+  - `input()` / `output()`: props reactivas y emisión de eventos al padre.
+  - Lifecycle: `onMounted()`, `onUnmounted()`, `onUpdated()`.
 - **DI / IoC:**
   - `createApplication({ providers })`: arranque de la app con registro automático.
   - `@Service({ scope, dependencies })`: marca una clase como componente gestionado.
+  - `@Configuration()` / `@Bean()`: configuración declarativa estilo Spring.
   - `ApplicationContext`: `register`, `registerProvider`, `registerComponent`, `createScope`, `resolve`, `has`.
   - Scopes: `SINGLETON` (por defecto), `TRANSIENT`, `SCOPED`.
-  - Contextos hijo (scopes) que heredan providers de sus ancestros.
   - Detección de dependencias circulares y validación de scope.
+- **Stores (estado global reactivo):**
+  - `@Store()`: marca una clase como store global sin IoC.
+  - `useStore(StoreClass)`: retorna una instancia singleton reactiva.
+  - `resetStores()`: limpia todas las instancias (útil en tests).
+- **Hooks (lógica reutilizable):**
+  - `@Hook()`: marca una clase como hook de componentes.
+  - `useHook(HookClass)`: crea una instancia nueva por componente consumidor.
+  - Sus métodos `onMounted`/`onUnmounted` se enlazan al ciclo de vida del componente.
+- **Directivas personalizadas:**
+  - `@Directive()`: marca una clase como directiva reutilizable en templates.
+  - Uso en `.bel`: `@clickable (enabled) { ... }` compila a `h(Clickable, { enabled }, [...])`.
+- **Compiler `.bel` → TypeScript:**
+  - JSX a llamadas `h()` / `text()`.
+  - `@if` / `@else` / `@else if` a expresiones ternarias.
+  - `@for (item of items; key)` a `.map()` con VNodes keyados.
+  - `@switch` / `@case` / `@default` a IIFE con `switch`.
+  - Directivas custom PascalCase a componentes.
+  - Auto-inyección de imports del runtime.
+- **Extensión VSCode:**
+  - Syntax highlighting para `.bel` (decoradores, directivas, keywords).
+  - IntelliSense: completions, hover, go-to-definition.
+  - Diagnostics (syntactic + semantic).
+  - Semantic tokens y folding ranges.
+- **VNodes:**
+  - `h()`, `text()`, `createTextVNode()`.
+  - Diffing y patching de árbol virtual.
+  - `isSameVNode()` para comparación por tipo + key.
 
 ### Requisitos
 
 - Node.js 22+.
-- TypeScript con **decoradores estándar (TC39)** — esbuild los baja usando `esbuild.target` configurado en `vitest.config.ts`.
+- TypeScript con **decoradores estándar (TC39)**.
 
-### Empezar
+### Empezar rápido
 
 ```bash
 npm install
-npm test          # ejecuta la suite (104 tests / 14 archivos)
+npm test          # ejecuta la suite (337 tests / 36 archivos)
 ```
 
-Ejecutar el ejemplo:
+### Ejemplos
 
-```bash
-npx vite-node --config vitest.config.ts examples/basic-di.ts
+#### Componente `.bel`
+
+```bel
+@import { ref } from "belzium";
+
+@Component()
+class Counter {
+  count = ref(0);
+  items = [1, 2, 3];
+
+  template() {
+    return (
+      <div>
+        <h1>Conteo: {this.count.value}</h1>
+        @if (this.count.value >= 3) {
+          <p>Grande</p>
+        } @else {
+          <p>Pequeño</p>
+        }
+        <ul>
+          @for (n of this.items; n) {
+            <li>Item {n}</li>
+          }
+        </ul>
+        <button onClick={() => this.count.value++}>+1</button>
+      </div>
+    );
+  }
+}
 ```
 
-Salida esperada:
-
-```
-[APP] Hola desde Belzium
-```
-
-### Ejemplo
+#### Equivalente en TypeScript
 
 ```ts
-import { createApplication } from "../src/core/application";
-import { Service } from "../src/di/decorators";
+import { Component, ref, h, text, createApp } from "belzium";
 
-@Service()
-class Logger {
-    log(message: string) {
-        console.log(`[APP] ${message}`);
-    }
+@Component()
+class Counter {
+  count = ref(0);
+  items = [1, 2, 3];
+
+  render() {
+    return h("div", null, [
+      h("h1", null, [text(`Conteo: ${this.count.value}`)]),
+      ...(this.count.value >= 3
+        ? [h("p", null, [text("Grande")])]
+        : [h("p", null, [text("Pequeño")])]),
+      h("ul", null, [
+        ...this.items.map((n) =>
+          h("li", { key: n }, [text(`Item ${n}`)])
+        ),
+      ]),
+      h("button", { onClick: () => this.count.value++ }, [text("+1")]),
+    ]);
+  }
 }
 
-@Service({
-    dependencies: [Logger]
-})
-class UserService {
-    constructor(private logger: Logger) {}
-    hello() {
-        this.logger.log("Hola desde Belzium");
-    }
-}
-
-const app = createApplication({ providers: [Logger, UserService] });
-const users = app.resolve(UserService);
-users.hello();
+createApp(Counter).mount(document.body);
 ```
 
 ### API
@@ -89,7 +140,7 @@ users.hello();
 #### Reactividad
 
 ```ts
-import { reactive, ref, computed, effect, watch, watchEffect, toRaw, isRef } from "./src/index";
+import { reactive, ref, computed, effect, watch, watchEffect, toRaw, isRef } from "belzium";
 
 const state = reactive({ count: 0 });
 const num = ref(0);
@@ -103,79 +154,191 @@ watchEffect(() => console.log(num.value));
 #### Componentes
 
 ```ts
-import { createComponentInstance, setupComponent, provide, inject, getCurrentInstance } from "./src/index";
+import {
+  Component, createComponentInstance, setupComponent,
+  getCurrentInstance, provide, inject, useSlots,
+  onMounted, onUnmounted, onUpdated,
+} from "belzium";
 
-const component = {
-    setup(props, { emit }) {
-        const instance = getCurrentInstance();
-        provide("theme", "dark");
-        const theme = inject("theme", "light");
-        emit("update", 1);
-        return { theme };
-    }
-};
+@Component()
+class MyComponent {
+  theme = "dark";
 
-const instance = createComponentInstance(component, { onUpdate: (n) => console.log(n) });
-setupComponent(instance);
+  render() {
+    return h("div", null, [text(this.theme)]);
+  }
+}
 ```
 
-#### DI
+#### DI / IoC
 
 ```ts
-import { createApplication } from "./src/core/application";
-import { Service } from "./src/di/decorators";
-import { Scope } from "./src/di/scope";
+import { createApp, Service, Configuration, Bean, ApplicationContext } from "belzium";
 
-@Service({ scope: Scope.SINGLETON, dependencies: [Logger] })
-class UserService {
-    constructor(private logger: Logger) {}
+@Service()
+class Logger {
+  log(msg: string) { console.log(`[APP] ${msg}`); }
 }
 
-const app = createApplication({ providers: [UserService] });
-const service = app.resolve(UserService);
+@Service({ dependencies: [Logger] })
+class UserService {
+  constructor(private logger: Logger) {}
+  hello() { this.logger.log("Hola desde Belzium"); }
+}
+
+// Con createApp (runtime):
+const app = createApp(MyRootComponent);
+app.mount(document.body);
+
+// Con createApplication (solo DI):
+const ctx = new ApplicationContext();
+ctx.registerProvider({ useClass: UserService, dependencies: [Logger] });
+const users = ctx.resolve(UserService);
 ```
 
-Registro programático sin decoradores:
+#### Stores
 
 ```ts
-import { ApplicationContext } from "./src/di/applicationContext";
+import { Store, useStore, resetStores, ref } from "belzium";
 
-const context = new ApplicationContext();
-context.registerProvider({
-    token: UserService,
-    useClass: UserService,
-    dependencies: [Logger]
-});
-context.register(API_URL, "/api");       // ValueProvider
-const child = context.createScope();      // contexto hijo (SCOPED)
+@Store()
+class CounterStore {
+  count = ref(0);
+}
+
+// En cualquier componente:
+const store = useStore(CounterStore);
+store.count.value++; // reactiva, re-renderiza componentes que la lean
+
+// En tests:
+resetStores();
 ```
 
-Errores del contenedor:
+#### Hooks
 
-- `No provider found for token`
-- `Circular dependency detected`
-- `SINGLETON provider cannot depend on SCOPED provider`
+```ts
+import { Hook, useHook, onMounted, ref } from "belzium";
+
+@Hook()
+class Timer {
+  elapsed = ref(0);
+  onMounted() { /* se ejecuta al montar el componente consumidor */ }
+  onUnmounted() { /* se ejecuta al desmontar */ }
+}
+
+// Dentro de un componente:
+const timer = useHook(Timer);
+console.log(timer.elapsed.value);
+```
+
+#### Directivas
+
+```ts
+import { Directive, h, text } from "belzium";
+
+@Directive()
+class Clickable {
+  props!: Readonly<{ enabled?: boolean }>;
+
+  render() {
+    return h("button", null, [text(String(this.props.enabled))]);
+  }
+}
+```
+
+Uso en template `.bel`: `@clickable (this.isEnabled) { <span>Click</span> }`
+
+#### VNodes
+
+```ts
+import { h, text, createTextVNode, isSameVNode } from "belzium";
+
+const vnode = h("div", { class: "card" }, [
+  text("Hello"),
+  h("span", null, [text("World")]),
+]);
+
+isSameVNode(vnode, h("div", null, [])); // true (mismo tipo, sin key)
+```
+
+### Compiler `.bel`
+
+El compiler transforma archivos `.bel` (TypeScript + JSX + directivas Belzium) en TypeScript válido:
+
+| Sintaxis `.bel` | Salida |
+|-----------------|--------|
+| `<div>` | `h("div", null, [...])` |
+| `<UserCard />` | `h(UserCard, null, [...])` |
+| `{expr}` | `text(String(expr))` |
+| `@if (c) { ... } @else { ... }` | `...((c) ? [...] : [...])` |
+| `@for (n of items; key) { ... }` | `...items.map((n) => h(..., { key }, [...]))` |
+| `@switch (e) { @case ("v") {...} }` | IIFE con `switch` |
+| `@clickable (p) { ... }` | `h(Clickable, { p }, [...])` |
+
+Uso:
+
+```ts
+import { compile } from "belzium/compiler";
+
+const ts = compile(belSource, { importPath: "belzium" });
+```
+
+### Extensión VSCode
+
+La extensión para `.bel` se encuentra en `tools/belzium-language/`.
+
+**Instalación:**
+
+```bash
+cd tools/belzium-language
+npm install
+npm run build
+# Copiar la carpeta resultante a ~/.vscode/extensions/
+```
+
+**Features:**
+- Syntax highlighting con TextMate grammar.
+- Completions de directivas (`@if`, `@for`, `@switch`, ...) e IntelliSense completo.
+- Hover con tipo inferido.
+- Go-to-definition entre archivos `.bel`.
+- Diagnostics (syntactic + semantic) con debounce.
+- Semantic tokens y folding ranges.
 
 ### Estructura del proyecto
 
 ```
 src/
-  reactive/      Sistema reactivo (proxies, refs, efectos, watch, scheduler)
-  component/     Sistema de componentes (instancia, setup, provide/inject)
-  di/            Inyección de dependencias (ApplicationContext, @Service, scopes)
-  core/          Application / createApplication
-  index.ts       API pública (reactividad y componentes)
-tests/           Suites de tests (vitest)
-examples/        Ejemplos ejecutables
+  reactive/        Reactividad (proxies, refs, efectos, scheduler)
+  component/       Componentes (decoradores, lifecycle, slots, I/O, hooks, directives)
+  di/              DI/IoC (ApplicationContext, @Service, scopes, tokens)
+  runtime/         Runtime (createApp, VNodes, renderers)
+  compiler.ts      Compiler .bel → TypeScript
+  tsxTransform.ts  Transform .bel → TSX para soporte IDE
+  store.ts         @Store (estado global reactivo)
+  index.ts         API pública
+tools/
+  belzium-language/  Extensión VSCode para .bel
+tests/               337 tests (36 archivos)
+docs/                Language spec + compiler architecture
 ```
 
-> Nota: el DI aún no está re-exportado en `index.ts`; se importa directamente desde `src/di/` (en desarrollo).
+### Scripts
+
+```bash
+npm test                  # ejecutar tests
+npm run typecheck         # verificar tipos
+npm run build:types       # generar archivos .d.ts
+npm run build:language    # compilar extensión VSCode
+npm run typecheck:language # verificar tipos de la extensión
+```
 
 ### Tests
 
 ```bash
 npx vitest run
 ```
+
+337 tests cubriendo: reactividad, componentes, DI/IoC, stores, hooks, directivas, compiler, language service.
 
 ---
 
@@ -188,72 +351,123 @@ npx vitest run
   - `ref()`: single reactive values with automatic unwrapping.
   - `computed()`: derived values with caching and lazy recalculation.
   - `effect()`, `watch()`, `watchEffect()`: effects that react to changes.
-  - `toRaw()`, `toReactive()`, `RAW`: conversion between raw and reactive objects.
-  - Scheduler with a job queue and deduplication (`flush: "sync" | "pre"`).
+  - `toRaw()`, `toReactive()`: conversion between raw and reactive objects.
+  - Scheduler with job queue and deduplication (`flush: "sync" | "pre"`).
 - **Components:**
-  - `createComponentInstance()`, `setupComponent()`: instance lifecycle.
+  - `@Component()`, `@UI()`: decorators for declaring components.
   - `setup(props, { emit })`: configuration function per component.
   - Public proxy with `ref` unwrapping.
   - `provide()` / `inject()`: values shared between ancestors and descendants.
-  - `emit`: events to the parent component (`onXxx`).
+  - `useSlots()`: slot content access.
+  - `input()` / `output()`: reactive props and event emission to parent.
+  - Lifecycle: `onMounted()`, `onUnmounted()`, `onUpdated()`.
 - **DI / IoC:**
   - `createApplication({ providers })`: app bootstrap with automatic registration.
   - `@Service({ scope, dependencies })`: marks a class as a managed component.
+  - `@Configuration()` / `@Bean()`: Spring-style declarative configuration.
   - `ApplicationContext`: `register`, `registerProvider`, `registerComponent`, `createScope`, `resolve`, `has`.
   - Scopes: `SINGLETON` (default), `TRANSIENT`, `SCOPED`.
-  - Child contexts (scopes) inheriting providers from their ancestors.
   - Circular dependency detection and scope validation.
+- **Stores (global reactive state):**
+  - `@Store()`: marks a class as a global non-IoC store.
+  - `useStore(StoreClass)`: returns a reactive singleton instance.
+  - `resetStores()`: clears all live instances (useful in tests).
+- **Hooks (reusable lifecycle logic):**
+  - `@Hook()`: marks a class as a component hook.
+  - `useHook(HookClass)`: creates a new instance per consuming component.
+  - Its `onMounted`/`onUnmounted` methods bind to the consumer's lifecycle.
+- **Custom Directives:**
+  - `@Directive()`: marks a class as a reusable template directive.
+  - Usage in `.bel`: `@clickable (enabled) { ... }` compiles to `h(Clickable, { enabled }, [...])`.
+- **`.bel` Compiler → TypeScript:**
+  - JSX to `h()` / `text()` calls.
+  - `@if` / `@else` / `@else if` to ternary expressions.
+  - `@for (item of items; key)` to `.map()` with keyed VNodes.
+  - `@switch` / `@case` / `@default` to IIFE with `switch`.
+  - PascalCase custom directives to components.
+  - Auto-injection of runtime imports.
+- **VSCode Extension:**
+  - Syntax highlighting for `.bel` (decorators, directives, keywords).
+  - IntelliSense: completions, hover, go-to-definition.
+  - Diagnostics (syntactic + semantic).
+  - Semantic tokens and folding ranges.
+- **VNodes:**
+  - `h()`, `text()`, `createTextVNode()`.
+  - Virtual tree diffing and patching.
+  - `isSameVNode()` for type + key comparison.
 
 ### Requirements
 
 - Node.js 22+.
-- TypeScript with **standard decorators (TC39)** — esbuild lowers them using the `esbuild.target` set in `vitest.config.ts`.
+- TypeScript with **standard decorators (TC39)**.
 
 ### Getting started
 
 ```bash
 npm install
-npm test          # runs the suite (104 tests / 14 files)
+npm test          # runs the suite (337 tests / 36 files)
 ```
 
-Run the example:
+### Examples
 
-```bash
-npx vite-node --config vitest.config.ts examples/basic-di.ts
+#### `.bel` component
+
+```bel
+@import { ref } from "belzium";
+
+@Component()
+class Counter {
+  count = ref(0);
+  items = [1, 2, 3];
+
+  template() {
+    return (
+      <div>
+        <h1>Count: {this.count.value}</h1>
+        @if (this.count.value >= 3) {
+          <p>Big</p>
+        } @else {
+          <p>Small</p>
+        }
+        <ul>
+          @for (n of this.items; n) {
+            <li>Item {n}</li>
+          }
+        </ul>
+        <button onClick={() => this.count.value++}>+1</button>
+      </div>
+    );
+  }
+}
 ```
 
-Expected output:
-
-```
-[APP] Hola desde Belzium
-```
-
-### Example
+#### TypeScript equivalent
 
 ```ts
-import { createApplication } from "../src/core/application";
-import { Service } from "../src/di/decorators";
+import { Component, ref, h, text, createApp } from "belzium";
 
-@Service()
-class Logger {
-    log(message: string) {
-        console.log(`[APP] ${message}`);
-    }
+@Component()
+class Counter {
+  count = ref(0);
+  items = [1, 2, 3];
+
+  render() {
+    return h("div", null, [
+      h("h1", null, [text(`Count: ${this.count.value}`)]),
+      ...(this.count.value >= 3
+        ? [h("p", null, [text("Big")])]
+        : [h("p", null, [text("Small")])]),
+      h("ul", null, [
+        ...this.items.map((n) =>
+          h("li", { key: n }, [text(`Item ${n}`)])
+        ),
+      ]),
+      h("button", { onClick: () => this.count.value++ }, [text("+1")]),
+    ]);
+  }
 }
 
-@Service({
-    dependencies: [Logger]
-})
-class UserService {
-    constructor(private logger: Logger) {}
-    hello() {
-        this.logger.log("Hello from Belzium");
-    }
-}
-
-const app = createApplication({ providers: [Logger, UserService] });
-const users = app.resolve(UserService);
-users.hello();
+createApp(Counter).mount(document.body);
 ```
 
 ### API
@@ -261,7 +475,7 @@ users.hello();
 #### Reactivity
 
 ```ts
-import { reactive, ref, computed, effect, watch, watchEffect, toRaw, isRef } from "./src/index";
+import { reactive, ref, computed, effect, watch, watchEffect, toRaw, isRef } from "belzium";
 
 const state = reactive({ count: 0 });
 const num = ref(0);
@@ -275,76 +489,188 @@ watchEffect(() => console.log(num.value));
 #### Components
 
 ```ts
-import { createComponentInstance, setupComponent, provide, inject, getCurrentInstance } from "./src/index";
+import {
+  Component, createComponentInstance, setupComponent,
+  getCurrentInstance, provide, inject, useSlots,
+  onMounted, onUnmounted, onUpdated,
+} from "belzium";
 
-const component = {
-    setup(props, { emit }) {
-        const instance = getCurrentInstance();
-        provide("theme", "dark");
-        const theme = inject("theme", "light");
-        emit("update", 1);
-        return { theme };
-    }
-};
+@Component()
+class MyComponent {
+  theme = "dark";
 
-const instance = createComponentInstance(component, { onUpdate: (n) => console.log(n) });
-setupComponent(instance);
+  render() {
+    return h("div", null, [text(this.theme)]);
+  }
+}
 ```
 
-#### DI
+#### DI / IoC
 
 ```ts
-import { createApplication } from "./src/core/application";
-import { Service } from "./src/di/decorators";
-import { Scope } from "./src/di/scope";
+import { createApp, Service, Configuration, Bean, ApplicationContext } from "belzium";
 
-@Service({ scope: Scope.SINGLETON, dependencies: [Logger] })
-class UserService {
-    constructor(private logger: Logger) {}
+@Service()
+class Logger {
+  log(msg: string) { console.log(`[APP] ${msg}`); }
 }
 
-const app = createApplication({ providers: [UserService] });
-const service = app.resolve(UserService);
+@Service({ dependencies: [Logger] })
+class UserService {
+  constructor(private logger: Logger) {}
+  hello() { this.logger.log("Hello from Belzium"); }
+}
+
+// With createApp (runtime):
+const app = createApp(MyRootComponent);
+app.mount(document.body);
+
+// With createApplication (DI only):
+const ctx = new ApplicationContext();
+ctx.registerProvider({ useClass: UserService, dependencies: [Logger] });
+const users = ctx.resolve(UserService);
 ```
 
-Programmatic registration without decorators:
+#### Stores
 
 ```ts
-import { ApplicationContext } from "./src/di/applicationContext";
+import { Store, useStore, resetStores, ref } from "belzium";
 
-const context = new ApplicationContext();
-context.registerProvider({
-    token: UserService,
-    useClass: UserService,
-    dependencies: [Logger]
-});
-context.register(API_URL, "/api");       // ValueProvider
-const child = context.createScope();      // child context (SCOPED)
+@Store()
+class CounterStore {
+  count = ref(0);
+}
+
+// In any component:
+const store = useStore(CounterStore);
+store.count.value++; // reactive, re-renders consuming components
+
+// In tests:
+resetStores();
 ```
 
-Container errors:
+#### Hooks
 
-- `No provider found for token`
-- `Circular dependency detected`
-- `SINGLETON provider cannot depend on SCOPED provider`
+```ts
+import { Hook, useHook, onMounted, ref } from "belzium";
+
+@Hook()
+class Timer {
+  elapsed = ref(0);
+  onMounted() { /* runs when the consuming component mounts */ }
+  onUnmounted() { /* runs when it unmounts */ }
+}
+
+// Inside a component:
+const timer = useHook(Timer);
+console.log(timer.elapsed.value);
+```
+
+#### Directives
+
+```ts
+import { Directive, h, text } from "belzium";
+
+@Directive()
+class Clickable {
+  props!: Readonly<{ enabled?: boolean }>;
+
+  render() {
+    return h("button", null, [text(String(this.props.enabled))]);
+  }
+}
+```
+
+Usage in `.bel` template: `@clickable (this.isEnabled) { <span>Click</span> }`
+
+#### VNodes
+
+```ts
+import { h, text, createTextVNode, isSameVNode } from "belzium";
+
+const vnode = h("div", { class: "card" }, [
+  text("Hello"),
+  h("span", null, [text("World")]),
+]);
+
+isSameVNode(vnode, h("div", null, [])); // true (same type, no key)
+```
+
+### `.bel` Compiler
+
+The compiler transforms `.bel` files (TypeScript + JSX + Belzium directives) into valid TypeScript:
+
+| `.bel` Syntax | Output |
+|---------------|--------|
+| `<div>` | `h("div", null, [...])` |
+| `<UserCard />` | `h(UserCard, null, [...])` |
+| `{expr}` | `text(String(expr))` |
+| `@if (c) { ... } @else { ... }` | `...((c) ? [...] : [...])` |
+| `@for (n of items; key) { ... }` | `...items.map((n) => h(..., { key }, [...]))` |
+| `@switch (e) { @case ("v") {...} }` | IIFE with `switch` |
+| `@clickable (p) { ... }` | `h(Clickable, { p }, [...])` |
+
+Usage:
+
+```ts
+import { compile } from "belzium/compiler";
+
+const ts = compile(belSource, { importPath: "belzium" });
+```
+
+### VSCode Extension
+
+The `.bel` extension is located in `tools/belzium-language/`.
+
+**Installation:**
+
+```bash
+cd tools/belzium-language
+npm install
+npm run build
+# Copy the output folder to ~/.vscode/extensions/
+```
+
+**Features:**
+- Syntax highlighting with TextMate grammar.
+- Directive completions (`@if`, `@for`, `@switch`, ...) and full IntelliSense.
+- Hover with inferred types.
+- Go-to-definition across `.bel` files.
+- Diagnostics (syntactic + semantic) with debounce.
+- Semantic tokens and folding ranges.
 
 ### Project structure
 
 ```
 src/
-  reactive/      Reactive system (proxies, refs, effects, watch, scheduler)
-  component/     Component system (instance, setup, provide/inject)
-  di/            Dependency injection (ApplicationContext, @Service, scopes)
-  core/          Application / createApplication
-  index.ts       Public API (reactivity and components)
-tests/           Test suites (vitest)
-examples/        Runnable examples
+  reactive/        Reactivity (proxies, refs, effects, scheduler)
+  component/       Components (decorators, lifecycle, slots, I/O, hooks, directives)
+  di/              DI/IoC (ApplicationContext, @Service, scopes, tokens)
+  runtime/         Runtime (createApp, VNodes, renderers)
+  compiler.ts      .bel → TypeScript compiler
+  tsxTransform.ts  .bel → TSX transform for IDE support
+  store.ts         @Store (global reactive state)
+  index.ts         Public API
+tools/
+  belzium-language/  VSCode extension for .bel
+tests/               337 tests (36 files)
+docs/                Language spec + compiler architecture
 ```
 
-> Note: the DI is not yet re-exported from `index.ts`; it is imported directly from `src/di/` (work in progress).
+### Scripts
+
+```bash
+npm test                  # run tests
+npm run typecheck         # verify types
+npm run build:types       # generate .d.ts files
+npm run build:language    # build VSCode extension
+npm run typecheck:language # verify extension types
+```
 
 ### Tests
 
 ```bash
 npx vitest run
 ```
+
+337 tests covering: reactivity, components, DI/IoC, stores, hooks, directives, compiler, language service.
