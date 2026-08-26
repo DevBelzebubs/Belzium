@@ -66,8 +66,8 @@ class App {
   render() {
     return (
       <div>
-        @if (this.ok) { <p>Yes</p> }
-        @else { <p>No</p> }
+        <if condition={this.ok}><p>Yes</p></if>
+        <else><p>No</p></else>
       </div>
     );
   }
@@ -84,9 +84,9 @@ class App {
   render() {
     return (
       <ul>
-        @for (u of this.users; u.id) {
+        <for each={u of this.users} key={u.id}>
           <li>{u.name}</li>
-        }
+        </for>
       </ul>
     );
   }
@@ -103,11 +103,11 @@ class App {
   render() {
     return (
       <div>
-        @switch (this.status) {
-          @case ("loading") { <p>Loading</p> }
-          @case ("ok") { <p>Ok</p> }
-          @default { <p>?</p> }
-        }
+        <switch value={this.status}>
+          <case test={\"loading\"}><Spinner /></case>
+          <case test={\"error\"}><Error /></case>
+          <default><p>Idle</p></default>
+        </switch>
       </div>
     );
   }
@@ -115,9 +115,12 @@ class App {
 
     expect(code).toContain("switch (this.status)");
     expect(code).toContain(
-      'case "loading": return [h("p", null, [text("Loading")])];',
+      'case "loading": return [h(Spinner, null, [])];',
     );
-    expect(code).toContain('default: return [h("p", null, [text("?")])];');
+    expect(code).toContain(
+      'case "error": return [h(Error, null, [])];',
+    );
+    expect(code).toContain('default: return [h("p", null, [text("Idle")])];');
   });
 
   it("compila directivas custom a h(PascalCase, props, children)", () => {
@@ -126,14 +129,16 @@ class App {
   render() {
     return (
       <div>
-        @clickable (enabled) { <span>Click</span> }
+        <Clickable enabled={enabled}>
+          <span>Click</span>
+        </Clickable>
       </div>
     );
   }
 }`);
 
     expect(code).toContain(
-      "h(Clickable, { enabled }, [h(\"span\", null, [text(\"Click\")])])",
+      "h(Clickable, { enabled: enabled }, [h(\"span\", null, [text(\"Click\")])])",
     );
   });
 
@@ -226,5 +231,42 @@ describe("compiler integration", () => {
     expect(root.textContent).not.toContain("Small");
 
     expect(root.querySelectorAll("li")).toHaveLength(3);
+  });
+
+  it("ignora comentarios de línea dentro de expresiones", () => {
+    const code = compile(`@Component()
+class App {
+  render() {
+    return (
+      <div>
+        <if condition={this.ok // comment
+}>
+          <p>Yes</p>
+        </if>
+      </div>
+    );
+  }
+}`);
+
+    expect(code).toContain("this.ok");
+    expect(code).toContain('h("p", null, [text("Yes")])');
+  });
+
+  it("ignora comentarios de bloque dentro de expresiones", () => {
+    const code = compile(`@Component()
+class App {
+  render() {
+    return (
+      <div>
+        <if condition={this.ok /* ) */}>
+          <p>Works</p>
+        </if>
+      </div>
+    );
+  }
+}`);
+
+    expect(code).toContain("this.ok");
+    expect(code).toContain('h("p", null, [text("Works")])');
   });
 });
