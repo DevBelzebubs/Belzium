@@ -64,6 +64,17 @@ const TEMPLATE_DIRECTIVES = new Set([
   "default",
 ]);
 
+// Nombres de tags XML de directivas que se transforman en TSX válido.
+const XML_DIRECTIVES = new Set([
+  "if",
+  "else-if",
+  "else",
+  "for",
+  "switch",
+  "case",
+  "default",
+]);
+
 // Decoradores de Belzium: se comentan en el documento virtual porque los
 // decoradores no son válidos en archivos .tsx (TS1206).
 const DECORATORS = new Set([
@@ -99,6 +110,10 @@ interface Frame {
   start: number;
   depth: number;
   close: string;
+  /** True if this frame was opened by an XML tag (`<if>`) instead of `@if`. */
+  xml?: boolean;
+  /** Tag name for XML frames (e.g. "if", "else-if", "for"). */
+  xmlTag?: string;
 }
 
 // Rango verbatim: [s, e) en el source corresponde a [v, v + (e - s)) en el
@@ -286,6 +301,9 @@ class TsxTransform {
         this.handleAt();
         continue;
       }
+      if (ch === "<") {
+        if (this.handleXmlTag()) continue;
+      }
       if (ch === "{") {
         if (this.frames.length > 0) this.depth++;
         this.copyChar(ch);
@@ -293,10 +311,10 @@ class TsxTransform {
       }
       if (ch === "}") {
         const top = this.frames[this.frames.length - 1];
-        if (top && this.depth === top.depth) {
+        if (top && this.depth === top.depth && !top.xml) {
           this.closeTopFrame();
         } else {
-          if (this.frames.length > 0) this.depth--;
+          if (this.frames.length > 0 && !(top?.xml)) this.depth--;
           this.copyChar(ch);
         }
         continue;
@@ -590,6 +608,287 @@ class TsxTransform {
       "",
       `</${tag}> }`,
     );
+  }
+
+  // ------------------------------------------------------------------
+  // Directivas XML (<if>, <for>, <switch>, etc.)
+  // ------------------------------------------------------------------
+
+  private handleXmlTag(): boolean {
+    const start = this.i;
+
+    // ── Closing tag: </tagname> ──
+    if (this.src[this.i + 1] === "/") {
+      const nameStart = this.i + 2;
+      const save = this.i;
+      this.i = nameStart;
+      const name = this.readName();
+      this.skipWs();
+
+      if (XML_DIRECTIVES.has(name) && this.src[this.i] === ">") {
+        const top = this.frames[this.frames.length - 1];
+        if (top?.xml && top.xmlTag === name) {
+          this.flushRun();
+          this.markers.push({
+            s: start,
+            v: this.out.length,
+            kind: "directive",
+          });
+          this.folding.push({ start: top.start, end: this.i });
+          this.i++; // consume '>'
+          this.depth--;
+
+          // Encadenar else / else-if tras </if> o </else>
+          if (top.kind === "if" || top.kind === "else") {
+            const elseInfo = this.peekXmlElse();
+            if (elseInfo) {
+              this.flushRun();
+              this.markers.push({
+                s: elseInfo.at,
+                v: this.out.length,
+                kind: "directive",
+              });
+              this.out += elseInfo.prefix;
+              if (elseInfo.cond) this.appendCond(elseInfo.cond);
+              this.out += elseInfo.suffix;
+              this.i = elseInfo.bodyOpen;
+              this.frames[this.frames.length - 1] = {
+                kind: elseInfo.kind,
+                start: elseInfo.at,
+                depth: this.depth,
+                close: elseInfo.close,
+                xml: true,
+                xmlTag: elseInfo.xmlTag,
+              };
+              return true;
+            }
+          }
+
+          this.out += top.close;
+          this.frames.pop();
+          return true;
+        }
+      }
+
+      this.i = save;
+      return false;
+    }
+
+    // ── Opening tag: <tagname ...> ──
+    const save = this.i;
+    this.i++; // skip '<'
+    const name = this.readName();
+
+    if (!XML_DIRECTIVES.has(name)) {
+      this.i = save;
+      return false;
+    }
+
+    this.flushRun();
+    this.markers.push({ s: start, v: this.out.length, kind: "directive" });
+
+    switch (name) {
+      case "if": {
+        const cond = this.readXmlAttr("condition");
+        this.skipWs();
+        if (this.src[this.i] !== ">") { this.i = save; return false; }
+        this.i++; // skip '>'
+        this.openXmlFrame("if", start, "{ (", cond, ") ? (<>", `</>) : null }`, "if");
+        return true;
+      }
+      case "else-if": {
+        const cond = this.readXmlAttr("condition");
+        this.skipWs();
+        if (this.src[this.i] !== ">") { this.i = save; return false; }
+        this.i++; // skip '>'
+        this.openXmlFrame(
+          "if",
+          start,
+          `</>) : (`,
+          cond,
+          `) ? (<>`,
+          `</>) : null }`,
+          "else-if",
+        );
+        return true;
+      }
+      case "else": {
+        this.skipWs();
+        if (this.src[this.i] !== ">") { this.i = save; return false; }
+        this.i++; // skip '>'
+        this.openXmlFrame("else", start, `</>) : (<>`, null, "", `</>) }`, "else");
+        return true;
+      }
+      case "for": {
+        const eachCond = this.readXmlAttr("each");
+        const match = eachCond.text.match(
+          /^([A-Za-z_$][\w$]*)\s+of\s+(.+)$/,
+        );
+        if (!match) { this.i = save; return false; }
+        const item = match[1];
+        const iterable = match[2].trim();
+        const iterableCond: Cond = {
+          text: iterable,
+          start: eachCond.start + eachCond.text.indexOf(iterable),
+          end:
+            eachCond.start + eachCond.text.indexOf(iterable) + iterable.length,
+        };
+        // skip key={...} if present
+        this.skipWs();
+        if (this.src.startsWith("key=", this.i)) {
+          this.i += 4;
+          this.readGroup("{", "}");
+        }
+        this.skipWs();
+        if (this.src[this.i] !== ">") { this.i = save; return false; }
+        this.i++; // skip '>'
+        this.openXmlFrame(
+          "for",
+          start,
+          "{ ",
+          iterableCond,
+          `.map((${item}) => (<>`,
+          `</>)) }`,
+          "for",
+        );
+        return true;
+      }
+      case "switch": {
+        const expr = this.readXmlAttr("value");
+        this.openXmlFrame(
+          "switch",
+          start,
+          `{ (() => { switch (`,
+          expr,
+          `) {`,
+          `} })() }`,
+          "switch",
+        );
+        return true;
+      }
+      case "case": {
+        const val = this.readXmlAttr("test");
+        this.openXmlFrame(
+          "case",
+          start,
+          "case (",
+          val,
+          "): return (<>",
+          `</>);`,
+          "case",
+        );
+        return true;
+      }
+      case "default": {
+        this.skipWs();
+        if (this.src[this.i] !== ">") { this.i = save; return false; }
+        this.i++; // skip '>'
+        this.openXmlFrame(
+          "case",
+          start,
+          "default: return (<>",
+          null,
+          "",
+          `</>);`,
+          "default",
+        );
+        return true;
+      }
+    }
+
+    this.i = save;
+    return false;
+  }
+
+  private readXmlAttr(attrName: string): Cond {
+    this.skipWs();
+    if (!this.src.startsWith(attrName + "=", this.i)) {
+      throw new Error(`Expected attribute "${attrName}"`);
+    }
+    this.i += attrName.length + 1; // skip attrName=
+    if (this.src[this.i] !== "{") {
+      throw new Error(`Expected "{" for attribute "${attrName}"`);
+    }
+    return this.readGroup("{", "}");
+  }
+
+  private openXmlFrame(
+    kind: Frame["kind"],
+    start: number,
+    prefix: string,
+    cond: Cond | null,
+    suffix: string,
+    close: string,
+    xmlTag: string,
+  ): void {
+    this.depth++;
+    this.frames.push({
+      kind,
+      start,
+      depth: this.depth,
+      close,
+      xml: true,
+      xmlTag,
+    });
+    this.flushRun();
+    this.emitOpen(prefix, cond, suffix);
+  }
+
+  private peekXmlElse(): {
+    prefix: string;
+    cond: Cond | null;
+    suffix: string;
+    bodyOpen: number;
+    at: number;
+    kind: "if" | "else";
+    close: string;
+    xmlTag: string;
+  } | null {
+    const save = this.i;
+    try {
+      this.skipWs();
+      if (this.src[this.i] !== "<") throw new Error("no xml else");
+      if (this.src[this.i + 1] === "/") throw new Error("no xml else");
+      const at = this.i;
+      this.i++; // skip '<'
+      const name = this.readName();
+      if (name !== "else" && name !== "else-if") throw new Error("no xml else");
+
+      if (name === "else-if") {
+        const cond = this.readXmlAttr("condition");
+        this.skipWs();
+        if (this.src[this.i] !== ">") throw new Error("no >");
+        this.i++; // skip '>'
+        return {
+          prefix: `</>) : (`,
+          cond,
+          suffix: `) ? (<>`,
+          bodyOpen: this.i,
+          at,
+          kind: "if",
+          close: `</>) : null }`,
+          xmlTag: "else-if",
+        };
+      }
+
+      // <else>
+      this.skipWs();
+      if (this.src[this.i] !== ">") throw new Error("no >");
+      this.i++; // skip '>'
+      return {
+        prefix: `</>) : (<>`,
+        cond: null,
+        suffix: "",
+        bodyOpen: this.i,
+        at,
+        kind: "else",
+        close: `</>) }`,
+        xmlTag: "else",
+      };
+    } catch {
+      this.i = save;
+      return null;
+    }
   }
 
   private closeTopFrame(): void {
