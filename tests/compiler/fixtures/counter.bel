@@ -9,15 +9,16 @@ export class Counter {
         <button onClick={() => this.count.value++}>
           Count: {this.count.value}
         </button>
-        @if (this.count.value >= 3) {
+        <if condition={this.count.value >= 3}>
           <p>Big</p>
-        } @else {
+        </if>
+        <else>
           <p>Small</p>
-        }
+        </else>
         <ul>
-          @for (n of this.items; n) {
+          <for each={n of this.items} key={n}>
             <li>Item {n}</li>
-          }
+          </for>
         </ul>
       </div>
     );

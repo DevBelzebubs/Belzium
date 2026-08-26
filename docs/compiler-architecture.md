@@ -74,28 +74,25 @@ los espacios intencionales de una misma línea (p. ej. el espacio final de
 
 ## Directivas
 
-`parseDirective()` despacha por nombre:
+`parseElement()` detecta tag names reservados (`if`, `for`, `switch`) y despacha:
 
 | Sintaxis | Codegen |
 | --- | --- |
-| `@if (c) { ... } @else { ... }` | `...((c) ? [...] : [...])` (soporta `@else if`) |
-| `@for (x of xs; key) { <li>...</li> }` | `...xs.map((x) => h("li", { key }, [...]))` |
-| `@switch (e) { @case ("v") { } @default { } }` | `...(() => { switch (e) { case "v": return [...]; default: return [...]; } })()` |
-| `@clickable (enabled) { ... }` | `h(Clickable, { enabled }, [...])` |
+| `<if condition={c}>...</if>` | `...((c) ? [...] : [...])` (soporta `<else-if>`) |
+| `<for each={x of xs} key={k}>...</for>` | `...xs.map((x) => h("li", { key }, [...]))` |
+| `<switch value={e}><case test={"v"}>...</case><default>...</default></switch>` | `...(() => { switch (e) { case "v": return [...]; default: return [...]; } })()` |
+| `<Clickable enabled={enabled}>...</Clickable>` | `h(Clickable, { enabled: enabled }, [...])` |
 
 Detalles:
 
-- Los cuerpos `{ ... }` se leen con `parseBracedChildren()`, que consume las
-  llaves y devuelve el array de hijos compilado.
-- `@if` encadena `@else`/`@else if` con lookahead (retrocede si no es `@else`).
-- `@for` separa `loopPart; keyPart` con `splitTopLevel` (respeta strings y
-  agrupadores), exige `item of iterable` y consume el `{` que abre el cuerpo.
-- `@switch` exige únicamente `@case`/`@default` dentro del cuerpo; el `default`
-  siempre existe (vacío si no se declaró).
-- Las directivas custom usan `toPascalCase` sobre el nombre kebab para generar
-  `h(NombrePascal, props, children)`; las props listadas en `( ... )` se pasan
-  como identificadores.
-- `@else`, `@case` y `@default` fuera de su directiva padre lanzan error.
+- `attachElseChain()` usa look-ahead para encadenar `<else-if>`/`<else>` como
+  hermanos después de `</if>`, mutando `alternate` del nodo padre.
+- `parseForElement()` parsea `each={item of iterable}` con regex, extrae `key={}` opcional.
+- `parseSwitchElement()` reutiliza `parseElement()` para `<case>` y `<default>`
+  como nodos hijos Element; extrae `test={}` de cada `<case>`.
+- Componentes custom (PascalCase) se parsean como elementos JSX estándar;
+  `emitElement` genera `h(PascalName, props, children)` directamente.
+- `<else-if>` o `<else>` fuera de contexto lanzan error explícito.
 
 ## Helpers de lectura
 

@@ -17,15 +17,16 @@ export class Counter {
         <button onClick={() => this.count.value++}>
           Count: {this.count.value}
         </button>
-        @if (this.count.value >= 3) {
+        <if condition={this.count.value >= 3}>
           <p>Big</p>
-        } @else {
+        </if>
+        <else>
           <p>Small</p>
-        }
+        </else>
         <ul>
-          @for (n of this.items; n) {
+          <for each={n of this.items} key={n}>
             <li>Item {n}</li>
-          }
+          </for>
         </ul>
       </div>
     );
@@ -110,58 +111,61 @@ class Card {
 }
 ```
 
-## Directivas de plantilla (minúsculas)
+## Directivas de plantilla (etiquetas XML)
 
-Se escriben con `@` en minúscula dentro del template.
+Se escriben como etiquetas XML dentro del template.
 
-### `@if` / `@else` / `@else if`
+### `<if>` / `<else-if>` / `<else>`
 
 ```bel
-@if (this.count.value >= 3) {
+<if condition={this.count.value >= 3}>
   <p>Big</p>
-} @else {
+</if>
+<else>
   <p>Small</p>
-}
+</else>
 ```
 
 Compila a una expresión ternaria esparcida: `...((cond) ? [...] : [...])`.
-`@else if (otra)` añade otra rama ternaria.
+`<else-if condition={otra}>` añade otra rama ternaria.
 
-### `@for`
+### `<for>`
 
 ```bel
 <ul>
-  @for (n of this.items; n) {
+  <for each={n of this.items} key={n}>
     <li>Item {n}</li>
-  }
+  </for>
 </ul>
 ```
 
-La cláusula tras `;` es la key de iteración (sintaxis `item of iterable; key`).
+La sintaxis es `each={item of iterable}`. El atributo `key` es opcional.
 Compila a `...this.items.map((n) => h("li", { key: n }, [...]))`.
 
-### `@switch` / `@case` / `@default`
+### `<switch>` / `<case>` / `<default>`
 
 ```bel
-@switch (this.status) {
-  @case ("loading") { <Spinner /> }
-  @case ("ok")      { <Ok /> }
-  @default          { <Empty /> }
-}
+<switch value={this.status}>
+  <case test={"loading"}><Spinner /></case>
+  <case test={"ok"}><Ok /></case>
+  <default><Empty /></default>
+</switch>
 ```
 
-Compila a una IIFE con un `switch` real; cada `@case`/`@default` retorna su lista
+Compila a una IIFE con un `switch` real; cada `<case>`/`<default>` retorna su lista
 de nodos.
 
-### Directivas custom (PascalCase)
+### Componentes custom (PascalCase)
 
 ```bel
-@clickable (enabled) { <span>Click</span> }
+<Clickable enabled={enabled}>
+  <span>Click</span>
+</Clickable>
 ```
 
-La directiva es un componente registrado con `@Directive()` (ver `@Directive`
-en Decoradores). Compila a `h(Clickable, { enabled }, [...])`: recibe las props
-listadas y su contenido como slots.
+Un componente registrado con `@Directive()` (ver `@Directive`
+en Decoradores). Compila a `h(Clickable, { enabled: enabled }, [...])`: recibe las props
+como atributos JSX y su contenido como slots.
 
 ## Ciclo de vida
 
@@ -182,7 +186,6 @@ listadas y su contenido como slots.
 | `@Store`                  | Estado global (no-IoC)       | Archivo    |
 | `@Hook`                   | Lógica reutilizable          | Archivo    |
 | `@Directive`              | Directiva custom del template| Archivo    |
-| `@if @else @for @switch @case @default` | Directivas de plantilla | Plantilla (compilador) |
 
 ## Compilación
 
