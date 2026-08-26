@@ -11,7 +11,6 @@ import type {
   ForDirectiveNode,
   SwitchDirectiveNode,
   SwitchCaseNode,
-  CustomDirectiveNode,
   AttributeNode,
   NormalAttributeNode,
   SpreadAttributeNode,
@@ -100,10 +99,18 @@ export class ASTBuilder {
     return this.parseElement();
   }
 
-  private parseElement(): ElementNode {
+  private parseElement(): TemplateNode {
     const start = this.i;
     this.i++;
     const tag = this.readTagName();
+
+    if (tag === "if") return this.parseIfElement(start);
+    if (tag === "for") return this.parseForElement(start);
+    if (tag === "switch") return this.parseSwitchElement(start);
+    if (tag === "else-if" || tag === "else") {
+      throw new Error(`<${tag}> must follow <if> or <else-if> at position ${start}`);
+    }
+
     const isComponent = /^[A-Z]/.test(tag) || tag.includes(".");
     const attributes = this.parseAttributes();
 
@@ -176,7 +183,11 @@ export class ASTBuilder {
           items.push(...inner);
           continue;
         }
-        items.push(this.parseTree());
+        const node = this.parseTree();
+        if (node.type === "IfDirective") {
+          this.attachElseChain(node);
+        }
+        items.push(node);
         continue;
       }
 
@@ -186,149 +197,123 @@ export class ASTBuilder {
         continue;
       }
 
-      if (ch === "@") {
-        items.push(...this.parseDirective());
-        continue;
-      }
-
-      if (ch === "}") break;
-
       items.push(this.readRawText());
     }
     return items;
   }
 
-  // ── Braced children for directives: reads `{`, children, `}` ──
+  // ── Reserved directive tags ────────────────────────────────
 
-  private parseBracedChildren(): TemplateNode[] {
-    this.skipWs();
-    if (this.src[this.i] !== "{") throw new Error(`Expected "{" at position ${this.i}`);
+  private parseIfElement(start: number): IfDirectiveNode {
+    const condition = this.readDirectiveAttr("condition", start);
     this.i++;
-    const children = this.parseChildren();
-    this.skipWs();
-    if (this.src[this.i] !== "}") throw new Error(`Expected "}" at position ${this.i}`);
-    this.i++;
-    return children;
-  }
-
-  // ── Directives ──────────────────────────────────────────────
-
-  private parseDirective(): TemplateNode[] {
-    const save = this.i;
-    this.i++;
-    const name = this.readDirectiveName();
-    switch (name) {
-      case "if": return [this.parseIfChain()];
-      case "for": return [this.parseFor()];
-      case "switch": return [this.parseSwitch()];
-      case "else": case "case": case "default":
-        this.i = save;
-        return [this.readRawText()];
-      default: return [this.parseCustomDirective(name)];
-    }
-  }
-
-  private parseIfChain(): IfDirectiveNode {
-    const start = this.i - 3;
-    this.skipWs();
-    const condition = this.readGroup("(", ")");
-    const consequent = this.parseBracedChildren();
-
-    let alternate: TemplateNode[] | IfDirectiveNode | null = null;
-
-    while (true) {
-      const save = this.i;
-      this.skipWs();
-      if (this.src[this.i] !== "@") { this.i = save; break; }
-      this.i++;
-      const name = this.readDirectiveName();
-      if (name !== "else") { this.i = save; break; }
-      this.skipWs();
-      if (this.src.startsWith("if", this.i) && !/[A-Za-z0-9_$]/.test(this.src[this.i + 2] ?? "")) {
-        this.i += 2;
-        alternate = this.parseIfChain();
-        return { type: "IfDirective", condition, consequent, alternate, start, end: this.i };
-      }
-      const elseBody = this.parseBracedChildren();
-      alternate = elseBody;
-      return { type: "IfDirective", condition, consequent, alternate, start, end: this.i };
-    }
-
+    const consequent = this.parseChildren();
+    this.consumeClosingTag("if");
     return { type: "IfDirective", condition, consequent, alternate: null, start, end: this.i };
   }
 
-  private parseFor(): ForDirectiveNode {
-    const start = this.i - 3;
-    this.skipWs();
-    const group = this.readGroup("(", ")");
-    const parts = splitTopLevel(group, ";");
-    const loopPart = (parts[0] ?? "").trim();
-    const keyPart = parts[1]?.trim() ?? null;
-    const match = loopPart.match(/^([A-Za-z_$][\w$]*)\s+of\s+(.+)$/);
-    if (!match) throw new Error(`Invalid @for syntax: expected "item of items"`);
-
-    this.skipWs();
-    if (this.src[this.i] === "{") this.i++;
-
-    this.skipWs();
-    const element = this.parseElement();
-
-    this.skipWs();
-    if (this.src[this.i] !== "}") throw new Error(`Expected "}" to close @for body`);
+  private parseElseIfElement(): IfDirectiveNode {
+    const start = this.i;
+    this.i += 8;
+    const condition = this.readDirectiveAttr("condition", start);
     this.i++;
+    const consequent = this.parseChildren();
+    this.consumeClosingTag("else-if");
+    return { type: "IfDirective", condition, consequent, alternate: null, start, end: this.i };
+  }
 
+  private attachElseChain(ifNode: IfDirectiveNode): void {
+    let current = ifNode;
+    while (true) {
+      this.skipWs();
+      if (this.src[this.i] !== "<") return;
+
+      if (this.src.startsWith("<else-if", this.i)) {
+        const elseIf = this.parseElseIfElement();
+        current.alternate = elseIf;
+        current = elseIf;
+        continue;
+      }
+
+      if (this.src.startsWith("<else>", this.i)) {
+        this.i += 6;
+        const children = this.parseChildren();
+        this.consumeClosingTag("else");
+        current.alternate = children;
+        return;
+      }
+
+      return;
+    }
+  }
+
+  private parseForElement(start: number): ForDirectiveNode {
+    const attributes = this.parseAttributes();
+    const eachAttr = attributes.find(a => a.type === "Attribute" && a.name === "each") as NormalAttributeNode | undefined;
+    if (!eachAttr || !eachAttr.value) {
+      throw new Error(`<for> requires an each attribute at position ${start}`);
+    }
+    const eachValue = this.extractAttrValue(eachAttr.value);
+    const match = eachValue.match(/^([A-Za-z_$][\w$]*)\s+of\s+(.+)$/);
+    if (!match) {
+      throw new Error(`Invalid <for> each syntax: expected "item of items" at position ${start}`);
+    }
+
+    const keyAttr = attributes.find(a => a.type === "Attribute" && a.name === "key") as NormalAttributeNode | undefined;
+    const key = keyAttr?.value ? this.extractAttrValue(keyAttr.value) : null;
+
+    this.i++;
+    const children = this.parseChildren();
+    this.consumeClosingTag("for");
     return {
       type: "ForDirective", variable: match[1], iterable: match[2].trim(),
-      key: keyPart, children: [element], start, end: this.i,
+      key, children, start, end: this.i,
     };
   }
 
-  private parseSwitch(): SwitchDirectiveNode {
-    const start = this.i - 6;
-    this.skipWs();
-    const discriminant = this.readGroup("(", ")");
-    this.skipWs();
-    if (this.src[this.i] !== "{") throw new Error(`Expected "{" to open @switch body`);
+  private parseSwitchElement(start: number): SwitchDirectiveNode {
+    const discriminant = this.readDirectiveAttr("value", start);
     this.i++;
+    const rawChildren = this.parseChildren();
+    this.consumeClosingTag("switch");
 
     const cases: SwitchCaseNode[] = [];
     let defaultCase: TemplateNode[] | null = null;
 
-    while (true) {
-      this.skipWs();
-      if (this.src[this.i] === "}") { this.i++; break; }
-      if (this.src[this.i] !== "@") throw new Error(`Expected @case or @default inside @switch`);
-      this.i++;
-      const name = this.readDirectiveName();
-      if (name === "case") {
-        this.skipWs();
-        const test = this.readGroup("(", ")");
-        const body = this.parseBracedChildren();
-        cases.push({ type: "SwitchCase", test, consequent: body, start: this.i, end: this.i });
-      } else if (name === "default") {
-        defaultCase = this.parseBracedChildren();
+    for (const child of rawChildren) {
+      if (child.type === "Element" && child.tag === "case") {
+        const testAttr = child.attributes.find(a => a.type === "Attribute" && a.name === "test") as NormalAttributeNode | undefined;
+        if (!testAttr || !testAttr.value) {
+          throw new Error(`<case> requires a test attribute at position ${child.start}`);
+        }
+        cases.push({
+          type: "SwitchCase", test: this.extractAttrValue(testAttr.value),
+          consequent: child.children, start: child.start, end: child.end,
+        });
+      } else if (child.type === "Element" && child.tag === "default") {
+        defaultCase = child.children;
+      } else if (child.type === "Text" && !child.value) {
+        // skip empty text
       } else {
-        throw new Error(`Unexpected @${name} inside @switch`);
+        throw new Error(`Only <case> and <default> allowed inside <switch> at position ${start}`);
       }
     }
 
     return { type: "SwitchDirective", discriminant, cases, defaultCase, start, end: this.i };
   }
 
-  private parseCustomDirective(name: string): CustomDirectiveNode {
-    const start = this.i - name.length - 1;
-    let props: string | null = null;
-    this.skipWs();
-    if (this.src[this.i] === "(") {
-      const inner = this.readGroup("(", ")");
-      const propNames = inner.split(",").map(p => p.trim()).filter(Boolean);
-      props = propNames.length ? propNames.join(", ") : null;
+  private readDirectiveAttr(name: string, start: number): string {
+    const attributes = this.parseAttributes();
+    const attr = attributes.find(a => a.type === "Attribute" && a.name === name) as NormalAttributeNode | undefined;
+    if (!attr || !attr.value) {
+      throw new Error(`<...> requires a ${name} attribute at position ${start}`);
     }
-    const children = this.parseBracedChildren();
-    return {
-      type: "CustomDirective", name, pascalName: toPascalCase(name),
-      props, children, start, end: this.i,
-    };
+    return this.extractAttrValue(attr.value);
+  }
+
+  private extractAttrValue(value: StringValueNode | ExpressionValueNode): string {
+    if (value.type === "StringValue") return value.value;
+    return value.expression;
   }
 
   // ── Helpers ─────────────────────────────────────────────────
@@ -345,6 +330,14 @@ export class ASTBuilder {
         if (ch === "\\") this.i++;
         else if (ch === inString) inString = null;
       } else if (ch === '"' || ch === "'" || ch === "`") { inString = ch; }
+      else if (ch === "/" && this.src[this.i + 1] === "/") {
+        while (this.i < this.src.length && this.src[this.i] !== "\n") this.i++;
+      }
+      else if (ch === "/" && this.src[this.i + 1] === "*") {
+        this.i += 2;
+        while (this.i < this.src.length - 1 && !(this.src[this.i] === "*" && this.src[this.i + 1] === "/")) this.i++;
+        this.i += 2;
+      }
       else if (ch === open) depth++;
       else if (ch === close) {
         depth--;
@@ -372,7 +365,7 @@ export class ASTBuilder {
     const start = this.i;
     while (this.i < this.src.length) {
       const ch = this.src[this.i];
-      if (ch === "<" || ch === "{" || ch === "}" || ch === "@") break;
+      if (ch === "<" || ch === "{") break;
       this.i++;
     }
     return { type: "Text", raw: this.src.slice(start, this.i), value: cleanText(this.src.slice(start, this.i)), start, end: this.i };
@@ -387,12 +380,6 @@ export class ASTBuilder {
   private readAttrName(): string {
     let j = this.i;
     while (j < this.src.length && !/[\s=/>{}]/.test(this.src[j])) j++;
-    const name = this.src.slice(this.i, j); this.i = j; return name;
-  }
-
-  private readDirectiveName(): string {
-    let j = this.i;
-    while (j < this.src.length && /[A-Za-z0-9-]/.test(this.src[j])) j++;
     const name = this.src.slice(this.i, j); this.i = j; return name;
   }
 
@@ -421,26 +408,7 @@ export class ASTBuilder {
   }
 }
 
-function toPascalCase(name: string): string {
-  return name.split("-").map(p => p.charAt(0).toUpperCase() + p.slice(1)).join("");
-}
-
 function cleanText(raw: string): string {
   if (!raw.trim()) return "";
   return raw.replace(/\s*\n\s*/g, " ").replace(/^\s+/, "");
-}
-
-function splitTopLevel(source: string, separator: string): string[] {
-  const parts: string[] = [];
-  let depth = 0, start = 0, inString: string | null = null;
-  for (let i = 0; i < source.length; i++) {
-    const ch = source[i];
-    if (inString) { if (ch === "\\") i++; else if (ch === inString) inString = null; continue; }
-    if (ch === '"' || ch === "'" || ch === "`") inString = ch;
-    else if (ch === "(" || ch === "[" || ch === "{") depth++;
-    else if (ch === ")" || ch === "]" || ch === "}") depth--;
-    else if (ch === separator && depth === 0) { parts.push(source.slice(start, i)); start = i + 1; }
-  }
-  parts.push(source.slice(start));
-  return parts;
 }

@@ -1,8 +1,9 @@
 // Definiciones de nodos AST para el compiler .bel.
 //
 // Cada nodo representa una construcción del lenguaje .bel:
-// elementos JSX, texto, interpolaciones, directivas de plantilla,
-// decoradores, y código TypeScript que pasa sin modificar.
+// elementos JSX, texto, interpolaciones, directivas de plantilla
+// (<if>, <for>, <switch>), decoradores, y código TypeScript
+// que pasa sin modificar.
 //
 // Todos los nodos incluyen `start` y `end` (offsets en el source original)
 // para habilitar source maps, errores con línea/columna, y tooling.
@@ -113,8 +114,7 @@ export type TemplateNode =
   | ExpressionNode
   | IfDirectiveNode
   | ForDirectiveNode
-  | SwitchDirectiveNode
-  | CustomDirectiveNode;
+  | SwitchDirectiveNode;
 
 // ---- Elementos JSX ----
 
@@ -229,13 +229,13 @@ export interface ExpressionValueNode extends Loc {
 // ---- Directivas de Plantilla ----
 
 /**
- * Directiva `@if` / `@else if` / `@else`.
+ * Directiva `<if>` / `<else-if>` / `<else>`.
  *
  * Se compila como expresión ternaria esparcida:
  *   `...((cond) ? [consequent] : [alternate])`
  *
- * Si no hay @else, alternate es null y se compila a `...((cond) ? [consequent] : [])`.
- * Si hay @else if, alternate es otro IfDirectiveNode (encadenado).
+ * Si no hay <else>, alternate es null y se compila a `...((cond) ? [consequent] : [])`.
+ * Si hay <else-if>, alternate es otro IfDirectiveNode (encadenado).
  */
 export interface IfDirectiveNode extends Loc {
   type: "IfDirective";
@@ -243,14 +243,14 @@ export interface IfDirectiveNode extends Loc {
   consequent: TemplateNode[];
   /**
    * - null: no hay rama alternativa
-   * - TemplateNode[]: @else simple
-   * - IfDirectiveNode: @else if (encadenado)
+   * - TemplateNode[]: <else> simple
+   * - IfDirectiveNode: <else-if> (encadenado)
    */
   alternate: TemplateNode[] | IfDirectiveNode | null;
 }
 
 /**
- * Directiva `@for (variable of iterable; key)`.
+ * Directiva `<for each={var of iterable} key={key}>`.
  *
  * Se compila como `.map()`:
  *   `...iterable.map((variable) => h(..., { key: ... }, [...]))`
@@ -261,13 +261,13 @@ export interface ForDirectiveNode extends Loc {
   variable: string;
   /** Expresión del iterable: "this.items", "this.users", etc. */
   iterable: string;
-  /** Key de iteración (después de `;`): "n.id", "item.key", etc. null si no hay key. */
+  /** Key de iteración (atributo key): "n.id", "item.key", etc. null si no hay key. */
   key: string | null;
   children: TemplateNode[];
 }
 
 /**
- * Directiva `@switch` / `@case` / `@default`.
+ * Directiva `<switch>` / `<case>` / `<default>`.
  *
  * Se compila como IIFE con switch:
  *   `...(() => { switch (discriminant) { case ...: return [...]; default: return [...]; } })()`
@@ -277,14 +277,14 @@ export interface SwitchDirectiveNode extends Loc {
   /** Expresión del switch: "this.status", "this.mode", etc. */
   discriminant: string;
   cases: SwitchCaseNode[];
-  /** Cuerpo del @default, o null si no hay default. */
+  /** Cuerpo del `<default>`, o null si no hay default. */
   defaultCase: TemplateNode[] | null;
 }
 
 /**
- * Un case dentro de un @switch.
+ * Un case dentro de un `<switch>`.
  *
- * Ejemplo: `@case ("loading") { <Spinner /> }`
+ * Ejemplo: `<case test={"loading"}><Spinner /></case>`
  */
 export interface SwitchCaseNode extends Loc {
   type: "SwitchCase";
@@ -293,20 +293,4 @@ export interface SwitchCaseNode extends Loc {
   consequent: TemplateNode[];
 }
 
-/**
- * Directiva custom PascalCase o kebab-case.
- *
- * Se compila como h(PascalCase, props, children):
- *   `@clickable (enabled) { <span>Click</span> }`
- *   → `h(Clickable, { enabled }, [h("span", null, [text("Click")])])`
- */
-export interface CustomDirectiveNode extends Loc {
-  type: "CustomDirective";
-  /** Nombre original: "clickable", "my-directive", etc. */
-  name: string;
-  /** Nombre PascalCase: "Clickable", "MyDirective", etc. */
-  pascalName: string;
-  /** Props raw: `enabled, count` (sin llaves). null si no hay props. */
-  props: string | null;
-  children: TemplateNode[];
-}
+
