@@ -13,7 +13,6 @@ import type {
   IfDirectiveNode,
   ForDirectiveNode,
   SwitchDirectiveNode,
-  CustomDirectiveNode,
   AttributeNode,
   NormalAttributeNode,
   SpreadAttributeNode,
@@ -101,7 +100,6 @@ function emitTemplateNode(node: TemplateNode): string {
     case "IfDirective": return emitIf(node);
     case "ForDirective": return emitFor(node);
     case "SwitchDirective": return emitSwitch(node);
-    case "CustomDirective": return emitCustomDirective(node);
     default: throw new Error(`Unknown node type: ${(node as { type: string }).type}`);
   }
 }
@@ -139,9 +137,13 @@ function emitIf(node: IfDirectiveNode): string {
 }
 
 function emitFor(node: ForDirectiveNode): string {
+  const meaningful = node.children.filter(
+    n => !(n.type === "Text" && !n.value),
+  );
+
   let childElement: ElementNode;
-  if (node.children.length === 1 && node.children[0].type === "Element") {
-    childElement = node.children[0];
+  if (meaningful.length === 1 && meaningful[0].type === "Element") {
+    childElement = meaningful[0];
   } else {
     childElement = {
       type: "Element", tag: "", isComponent: false,
@@ -169,13 +171,6 @@ function emitSwitch(node: SwitchDirectiveNode): string {
     ? `default: return [${emitChildren(node.defaultCase)}];`
     : "default: return [];";
   return `...(() => { switch (${node.discriminant}) { ${body} } })()`;
-}
-
-function emitCustomDirective(node: CustomDirectiveNode): string {
-  const propsCode = node.props
-    ? `{ ${node.props.split(",").map(p => p.trim()).join(", ")} }`
-    : "null";
-  return `h(${node.pascalName}, ${propsCode}, [${emitChildren(node.children)}])`;
 }
 
 function emitProps(attrs: AttributeNode[]): string {
