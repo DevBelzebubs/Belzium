@@ -82,7 +82,7 @@ export class Tokenizer {
     this.codeStart = -1;
 
     while (this.i < this.src.length) {
-      switch (this.mode) {
+      switch (this.mode as Mode) {
         case "code":
           this.stepCode();
           break;
