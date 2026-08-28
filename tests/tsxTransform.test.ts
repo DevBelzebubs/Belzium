@@ -47,8 +47,8 @@ export class Counter {
     expectTsx(result.code);
   });
 
-  it("traduce @if/@else a un ternario", () => {
-    const source = `@if (this.ok) { <p>Yes</p> } @else { <p>No</p> }`;
+  it("traduce <if>/<else> a un ternario", () => {
+    const source = `<if condition={this.ok}><p>Yes</p></if><else><p>No</p></else>`;
 
     const result = belToTsx(source);
 
@@ -60,8 +60,8 @@ export class Counter {
     expectTsx(result.code);
   });
 
-  it("encadena @else if", () => {
-    const source = `@if (a) {1} @else if (b) {2} @else {3}`;
+  it("encadena <else-if>", () => {
+    const source = `<if condition={a}>1</if><else-if condition={b}>2</else-if><else>3</else>`;
 
     const result = belToTsx(source);
 
@@ -69,10 +69,10 @@ export class Counter {
     expectTsx(result.code);
   });
 
-  it("traduce @for a map", () => {
-    const source = `@for (u of this.users; u.id) {
+  it("traduce <for> a map", () => {
+    const source = `<for each={u of this.users} key={u.id}>
   <li>{u.name}</li>
-}`;
+</for>`;
 
     const result = belToTsx(source);
 
@@ -82,11 +82,11 @@ export class Counter {
     expectTsx(result.code);
   });
 
-  it("traduce @switch/@case/@default", () => {
-    const source = `@switch (this.status) {
-  @case ("loading") { <p>Loading</p> }
-  @default { <p>?</p> }
-}`;
+  it("traduce <switch>/<case>/<default>", () => {
+    const source = `<switch value={this.status}>
+  <case test={"loading"}><p>Loading</p></case>
+  <default><p>?</p></default>
+</switch>`;
 
     const result = belToTsx(source);
 
@@ -97,17 +97,19 @@ export class Counter {
     expectTsx(result.code);
   });
 
-  it("traduce una directiva custom a un componente PascalCase", () => {
-    const source = `@clickable (enabled) { <span>Click</span> }`;
+  it("pasa directivas custom PascalCase como componentes JSX", () => {
+    const source = `<Clickable enabled={enabled}><span>Click</span></Clickable>`;
 
     const result = belToTsx(source);
 
-    expect(result.code.endsWith("{ <Clickable enabled={enabled}> <span>Click</span> </Clickable> }")).toBe(true);
+    expect(result.code).toContain("<Clickable enabled={enabled}>");
+    expect(result.code).toContain("<span>Click</span>");
+    expect(result.code).toContain("</Clickable>");
     expectTsx(result.code);
   });
 
   it("anida directivas correctamente", () => {
-    const source = `@if (a) { @for (x of xs) { <li>{x}</li> } }`;
+    const source = `<if condition={a}><for each={x of xs}><li>{x}</li></for></if>`;
 
     const result = belToTsx(source);
 
@@ -175,9 +177,9 @@ class App {
   render() {
     return (
       <div>
-        @if (this.ok) { <p>Yes</p> }
-        @else { <p>No</p> }
-        @for (u of this.users; u.id) { <li>{u.name}</li> }
+        <if condition={this.ok}><p>Yes</p></if>
+        <else><p>No</p></else>
+        <for each={u of this.users} key={u.id}><li>{u.name}</li></for>
       </div>
     );
   }
@@ -195,16 +197,16 @@ class App {
     }
   });
 
-  it("mapea la región generada de una directiva a su marcador @", () => {
-    const source = `@if (this.ok) { <p>Yes</p> } @else { <p>No</p> }`;
+  it("mapea la región generada de una directiva a su marcador XML", () => {
+    const source = `<if condition={this.ok}><p>Yes</p></if><else><p>No</p></else>`;
     const result = belToTsx(source);
     expectTsx(result.code);
 
-    for (const marker of ["@if", "@else"]) {
-      const at = source.indexOf(marker);
-      const virtual = result.toVirtual(at);
-      expect(result.toSource(virtual)).toBe(at);
-    }
+    const ifAt = source.indexOf("<if");
+    const virtual = result.toVirtual(ifAt);
+    expect(result.toSource(virtual)).toBe(ifAt);
+
+    expect(result.markers.some((m) => m.kind === "directive")).toBe(true);
   });
 
   it("mapea un decorador comentado a su marcador @", () => {
@@ -224,8 +226,8 @@ class App {
   render() {
     return (
       <div>
-        @if (this.ok) { <p>Yes</p> }
-        @else { <p>No</p> }
+        <if condition={this.ok}><p>Yes</p></if>
+        <else><p>No</p></else>
       </div>
     );
   }
@@ -234,8 +236,8 @@ class App {
 
     expect(result.markers.map((m) => m.s)).toEqual([
       source.indexOf("@Component"),
-      source.indexOf("@if"),
-      source.indexOf("@else"),
+      source.indexOf("<if"),
+      source.indexOf("<else>"),
     ]);
   });
 
@@ -245,7 +247,7 @@ class App {
     expect(empty.toVirtual(0)).toBe(empty.code.length);
     expect(empty.toSource(0)).toBeNull();
 
-    const source = `@if (c) { x }`;
+    const source = `<if condition={c}>x</if>`;
     const result = belToTsx(source);
     expect(result.toVirtual(-5)).toBeGreaterThanOrEqual(0);
     expect(result.toVirtual(source.length + 100)).toBeGreaterThanOrEqual(0);
@@ -253,11 +255,11 @@ class App {
   });
 
   it("mapea la región generada final (cierre de directiva)", () => {
-    const source = `@if (c) { x }`;
+    const source = `<if condition={c}>x</if>`;
     const result = belToTsx(source);
     expectTsx(result.code);
 
-    const at = source.indexOf("@if");
+    const at = source.indexOf("<if");
     const virtual = result.toVirtual(at);
     expect(result.toSource(virtual)).toBe(at);
 
@@ -266,7 +268,7 @@ class App {
   });
 
   it("mapea las condiciones de las directivas a su posición exacta", () => {
-    const source = `@if (this.ok) { <p>Yes</p> } @else if (this.other) { <p>Other</p> } @else { <p>No</p> }`;
+    const source = `<if condition={this.ok}><p>Yes</p></if><else-if condition={this.other}><p>Other</p></else-if><else><p>No</p></else>`;
     const result = belToTsx(source);
     expectTsx(result.code);
 
@@ -276,8 +278,8 @@ class App {
     }
   });
 
-  it("mapea la expresión iterable de @for a su posición exacta", () => {
-    const source = `@for (n of this.items; n) { <li>Item</li> }`;
+  it("mapea la expresión iterable de <for> a su posición exacta", () => {
+    const source = `<for each={n of this.items} key={n}><li>Item</li></for>`;
     const result = belToTsx(source);
     expectTsx(result.code);
 
@@ -285,8 +287,8 @@ class App {
     expect(result.toSource(result.toVirtual(at))).toBe(at);
   });
 
-  it("mapea la condición de @switch y el valor de @case a su posición exacta", () => {
-    const source = `@switch (this.kind) { @case ("a") { x } @default { y } }`;
+  it("mapea la condición de <switch> y el valor de <case> a su posición exacta", () => {
+    const source = `<switch value={this.kind}><case test={"a"}>x</case><default>y</default></switch>`;
     const result = belToTsx(source);
     expectTsx(result.code);
 

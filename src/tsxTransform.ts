@@ -3,18 +3,16 @@
 // A diferencia de src/compiler.ts (que genera llamadas h()/text()), este
 // transform produce un documento TSX que el servicio de TypeScript puede
 // analizar. Copia el cuerpo de las directivas verbatim para preservar las
-// posiciones (mapeo fuente ↔ virtual) y solo traduce los marcadores @... a
-// sintaxis TSX válida:
+// posiciones (mapeo fuente ↔ virtual) y solo traduce los marcadores XML
+// (<if>, <for>, <switch>, etc.) a sintaxis TSX válida:
 //
 //   @Component()               -> // @Component()        (comentado)
-//   @if (c) { ... }            -> { (c) ? (<> ... </>) : null }
-//   @for (x of xs; key) { ... }-> { xs.map((x) => (<> ... </>)) }
-//   @switch (e) { @case ... }  -> { (() => { switch (e) { ... } })() }
-//   @clickable (enabled) { ... }-> { <Clickable enabled={enabled}> ... </Clickable> }
+//   <if condition={c}>         -> { (c) ? (<> ... </>) : null }
+//   <for each={x of xs}>       -> { xs.map((x) => (<> ... </>)) }
+//   <switch value={e}>         -> { (() => { switch (e) { ... } })() }
 
 import {
   RUNTIME_APIS,
-  splitTopLevel,
   toPascalCase,
 } from "./compiler";
 
@@ -53,16 +51,6 @@ export interface BelTsxResult {
   // Regiones plegables de directivas @ (rango en el source).
   folding: readonly FoldingRange[];
 }
-
-// Directivas de plantilla reconocidas por el compilador.
-const TEMPLATE_DIRECTIVES = new Set([
-  "if",
-  "else",
-  "for",
-  "switch",
-  "case",
-  "default",
-]);
 
 // Nombres de tags XML de directivas que se transforman en TSX válido.
 const XML_DIRECTIVES = new Set([
@@ -311,10 +299,10 @@ class TsxTransform {
       }
       if (ch === "}") {
         const top = this.frames[this.frames.length - 1];
-        if (top && this.depth === top.depth && !top.xml) {
-          this.closeTopFrame();
+        if (top?.xml) {
+          this.copyChar(ch);
         } else {
-          if (this.frames.length > 0 && !(top?.xml)) this.depth--;
+          if (this.frames.length > 0) this.depth--;
           this.copyChar(ch);
         }
         continue;
@@ -411,10 +399,6 @@ class TsxTransform {
   // ------------------------------------------------------------------
 
   private handleAt(): void {
-    // El run verbatim termina justo antes del '@' (este carácter nunca se
-    // copia verbatim). Flushear aquí registra el segmento con su rango real;
-    // antes se flusheaba tarde (en openFrame) y el segmento estiraba su `e`
-    // más allá de lo copiado, desplazando el mapeo de posiciones.
     this.flushRun();
     const start = this.i;
     this.i++; // consume '@'
@@ -425,12 +409,7 @@ class TsxTransform {
       return;
     }
 
-    if (TEMPLATE_DIRECTIVES.has(name)) {
-      this.handleTemplateDirective(name, start);
-      return;
-    }
-
-    // Directiva custom o decorador: se distingue por el cuerpo `{ ... }`.
+    // Decorador: se lee el grupo (args) y se comenta para evitar TS1206.
     this.skipWs();
     const endOfName = this.i;
     let groupInner: string | null = null;
@@ -439,14 +418,7 @@ class TsxTransform {
       groupInner = this.readGroup("(", ")").text;
       endOfGroup = this.i;
     }
-    this.skipWs();
 
-    if (this.src[this.i] === "{") {
-      this.handleCustomDirective(name, groupInner, start);
-      return;
-    }
-
-    // Decorador: se comenta para evitar TS1206 (decorators in .tsx).
     const end = groupInner !== null ? endOfGroup : endOfName;
     const isKnownDecorator = DECORATORS.has(name);
     const looksLikeDeclaration =
@@ -454,7 +426,6 @@ class TsxTransform {
     if (isKnownDecorator || looksLikeDeclaration) {
       this.commentOut(start, end);
     } else {
-      // Email, texto o decorador desconocido: se conserva verbatim.
       this.copyRaw(start, end);
     }
   }
@@ -483,96 +454,6 @@ class TsxTransform {
   // Directivas de plantilla
   // ------------------------------------------------------------------
 
-  private handleTemplateDirective(name: string, start: number): void {
-    // El marcador ancla la región generada de esta directiva a su '@'.
-    this.markers.push({ s: start, v: this.out.length, kind: "directive" });
-    switch (name) {
-      case "if": {
-        this.skipWs();
-        const cond = this.readGroup("(", ")");
-        this.openFrame("if", start, "{ (", cond, ") ? (<>", `</>) : null }`);
-        return;
-      }
-      case "for": {
-        this.skipWs();
-        const group = this.readGroup("(", ")");
-        const parts = splitTopLevel(group.text, ";");
-        const match = parts[0]
-          ?.trim()
-          .match(/^([A-Za-z_$][\w$]*)\s+of\s+(.+)$/);
-        if (!match) {
-          throw new Error(`Invalid @for syntax: expected "item of items"`);
-        }
-        const item = match[1];
-        const iterable = match[2].trim();
-        const iterableStart = group.start + group.text.indexOf(iterable);
-        const iterableCond: Cond = {
-          text: iterable,
-          start: iterableStart,
-          end: iterableStart + iterable.length,
-        };
-        this.openFrame(
-          "for",
-          start,
-          "{ ",
-          iterableCond,
-          `.map((${item}) => (<>`,
-          `</>)) }`,
-        );
-        return;
-      }
-      case "switch": {
-        this.skipWs();
-        const expr = this.readGroup("(", ")");
-        this.openFrame(
-          "switch",
-          start,
-          "{ (() => { switch (",
-          expr,
-          ") {",
-          `} })() }`,
-        );
-        return;
-      }
-      case "case": {
-        this.skipWs();
-        const value = this.readGroup("(", ")");
-        this.openFrame("case", start, "case (", value, "): return (<>", `</>);`);
-        return;
-      }
-      case "default": {
-        this.openFrame("case", start, "default: return (<>", null, "", `</>);`);
-        return;
-      }
-      case "else": {
-        // @else suelto (sin @if): se copia verbatim, sin marcador.
-        this.markers.pop();
-        this.copyRaw(start, this.i);
-        return;
-      }
-    }
-  }
-
-  // Abre una directiva: consume `{`, empuja el marco y emite el apertura.
-  private openFrame(
-    kind: Frame["kind"],
-    start: number,
-    prefix: string,
-    cond: Cond | null,
-    suffix: string,
-    close: string,
-  ): void {
-    this.skipWs();
-    if (this.src[this.i] !== "{") {
-      throw new Error(`Expected "{" at position ${this.i}`);
-    }
-    this.i++;
-    this.depth++;
-    this.frames.push({ kind, start, depth: this.depth, close });
-    this.flushRun();
-    this.emitOpen(prefix, cond, suffix);
-  }
-
   // Emite el texto de apertura de una directiva; si hay condición, su texto
   // se copia verbatim (segmento) para preservar el mapeo de posiciones.
   private emitOpen(prefix: string, cond: Cond | null, suffix: string): void {
@@ -584,30 +465,6 @@ class TsxTransform {
   private appendCond(cond: Cond): void {
     this.segments.push({ s: cond.start, e: cond.end, v: this.out.length });
     this.out += cond.text;
-  }
-
-  private handleCustomDirective(
-    name: string,
-    groupInner: string | null,
-    start: number,
-  ): void {
-    this.markers.push({ s: start, v: this.out.length, kind: "custom" });
-    const tag = toPascalCase(name);
-    const props = groupInner
-      ? groupInner
-          .split(",")
-          .map((prop) => prop.trim())
-          .filter((prop) => prop !== "")
-      : [];
-    const attrs = props.map((prop) => `${prop}={${prop}}`).join(" ");
-    this.openFrame(
-      "custom",
-      start,
-      `{ <${tag}${attrs ? ` ${attrs}` : ""}>`,
-      null,
-      "",
-      `</${tag}> }`,
-    );
   }
 
   // ------------------------------------------------------------------
@@ -629,11 +486,6 @@ class TsxTransform {
         const top = this.frames[this.frames.length - 1];
         if (top?.xml && top.xmlTag === name) {
           this.flushRun();
-          this.markers.push({
-            s: start,
-            v: this.out.length,
-            kind: "directive",
-          });
           this.folding.push({ start: top.start, end: this.i });
           this.i++; // consume '>'
           this.depth--;
@@ -755,6 +607,9 @@ class TsxTransform {
       }
       case "switch": {
         const expr = this.readXmlAttr("value");
+        this.skipWs();
+        if (this.src[this.i] !== ">") { this.i = save; return false; }
+        this.i++; // skip '>'
         this.openXmlFrame(
           "switch",
           start,
@@ -768,6 +623,9 @@ class TsxTransform {
       }
       case "case": {
         const val = this.readXmlAttr("test");
+        this.skipWs();
+        if (this.src[this.i] !== ">") { this.i = save; return false; }
+        this.i++; // skip '>'
         this.openXmlFrame(
           "case",
           start,
@@ -885,86 +743,6 @@ class TsxTransform {
         close: `</>) }`,
         xmlTag: "else",
       };
-    } catch {
-      this.i = save;
-      return null;
-    }
-  }
-
-  private closeTopFrame(): void {
-    const top = this.frames[this.frames.length - 1];
-
-    // Registra el pliegue de la directiva: desde su '@' hasta la llave de
-    // cierre del cuerpo (this.i aún apunta a la llave).
-    this.folding.push({ start: top.start, end: this.i });
-
-    // Consume la llave de cierre del cuerpo y decrementa la profundidad.
-    // peekElse() mira a partir de aquí.
-    this.i++;
-    this.depth--;
-
-    // Un @if/@else puede continuar con @else / @else if.
-    if (top.kind === "if" || top.kind === "else") {
-      const elseInfo = this.peekElse();
-      if (elseInfo) {
-        this.flushRun();
-        this.markers.push({ s: elseInfo.at, v: this.out.length, kind: "directive" });
-        this.out += elseInfo.prefix;
-        if (elseInfo.cond) this.appendCond(elseInfo.cond);
-        this.out += elseInfo.suffix;
-        this.i = elseInfo.bodyOpen;
-        this.i++; // consume '{' del cuerpo del @else
-        this.depth++;
-        // El cierre del @else termina la expresión: sin ": null" extra,
-        // porque el body del @else ya es la rama else del ternario.
-        this.frames[this.frames.length - 1] = {
-          kind: "else",
-          start: elseInfo.at,
-          depth: this.depth,
-          close: `</>) }`,
-        };
-        return;
-      }
-    }
-
-    this.flushRun();
-    this.out += top.close;
-    this.frames.pop();
-  }
-
-  // Comprueba si tras el cierre del @if actual viene un @else / @else if.
-  // Devuelve null si no; en éxito deja `this.i` apuntando al '{' del cuerpo
-  // y `at` es el offset del '@' del @else en el source.
-  private peekElse(): {
-    prefix: string;
-    cond: Cond | null;
-    suffix: string;
-    bodyOpen: number;
-    at: number;
-  } | null {
-    const save = this.i;
-    try {
-      this.skipWs();
-      if (this.src[this.i] !== "@") throw new Error("no else");
-      const at = this.i;
-      this.i++;
-      if (this.readName() !== "else") throw new Error("no else");
-      this.skipWs();
-
-      if (
-        this.src.startsWith("if", this.i) &&
-        !/[A-Za-z0-9_$]/.test(this.src[this.i + 2] ?? "")
-      ) {
-        this.i += 2;
-        this.skipWs();
-        const cond = this.readGroup("(", ")");
-        this.skipWs();
-        if (this.src[this.i] !== "{") throw new Error("no body");
-        return { prefix: `</>) : (`, cond, suffix: `) ? (<>`, bodyOpen: this.i, at };
-      }
-
-      if (this.src[this.i] !== "{") throw new Error("no body");
-      return { prefix: `</>) : (<>`, cond: null, suffix: "", bodyOpen: this.i, at };
     } catch {
       this.i = save;
       return null;
