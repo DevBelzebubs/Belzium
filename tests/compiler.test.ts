@@ -231,6 +231,9 @@ describe("compiler integration", () => {
     expect(root.textContent).not.toContain("Small");
 
     expect(root.querySelectorAll("li")).toHaveLength(3);
+
+    // Desmonta para liberar el scope/efectos reactivos del componente.
+    app.unmount();
   });
 
   it("ignora comentarios de línea dentro de expresiones", () => {
@@ -268,5 +271,98 @@ class App {
 
     expect(code).toContain("this.ok");
     expect(code).toContain('h("p", null, [text("Works")])');
+  });
+
+  it("compila <else-if> encadenado correctamente", () => {
+    const code = compile(`@Component()
+class App {
+  render() {
+    return (
+      <div>
+        <if condition={this.status === "a"}>
+          <p>A</p>
+        </if>
+        <else-if condition={this.status === "b"}>
+          <p>B</p>
+        </else-if>
+        <else>
+          <p>C</p>
+        </else>
+      </div>
+    );
+  }
+}`);
+
+    expect(code).toContain(
+      "...((this.status === \"a\") ? [h(\"p\", null, [text(\"A\")])] : ((this.status === \"b\") ? [h(\"p\", null, [text(\"B\")])] : [h(\"p\", null, [text(\"C\")])]))",
+    );
+  });
+
+  it("compila <for> sin key", () => {
+    const code = compile(`@Component()
+class App {
+  render() {
+    return (
+      <ul>
+        <for each={n of this.items}>
+          <li>{n}</li>
+        </for>
+      </ul>
+    );
+  }
+}`);
+
+    expect(code).toContain(
+      '...this.items.map((n) => h("li", null, [text(String(n))]))',
+    );
+  });
+
+  it("compila <for> con múltiples hijos usando wrapper div", () => {
+    const code = compile(`@Component()
+class App {
+  render() {
+    return (
+      <ul>
+        <for each={item of this.items}>
+          <span>{item}</span>
+          <em>!</em>
+        </for>
+      </ul>
+    );
+  }
+}`);
+
+    expect(code).toContain('...this.items.map((item) => h("div", null, [h("span"');
+    expect(code).toContain('h("em", null, [text("!")])');
+  });
+
+  it("lanza error si <else-if> aparece sin <if> previo", () => {
+    expect(() => compile(`@Component()
+class App {
+  render() {
+    return (
+      <div>
+        <else-if condition={true}>
+          <p>Hi</p>
+        </else-if>
+      </div>
+    );
+  }
+}`)).toThrow(/<else-if> must follow/);
+  });
+
+  it("lanza error si <for> no tiene atributo each", () => {
+    expect(() => compile(`@Component()
+class App {
+  render() {
+    return (
+      <div>
+        <for>
+          <p>Hi</p>
+        </for>
+      </div>
+    );
+  }
+}`)).toThrow(/each attribute/);
   });
 });
