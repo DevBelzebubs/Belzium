@@ -327,21 +327,31 @@ export class ASTBuilder {
     while (this.i < this.src.length) {
       const ch = this.src[this.i];
       if (inString) {
-        if (ch === "\\") this.i++;
+        if (ch === "\\") this.i += 2;
         else if (ch === inString) inString = null;
-      } else if (ch === '"' || ch === "'" || ch === "`") { inString = ch; }
-      else if (ch === "/" && this.src[this.i + 1] === "/") {
-        while (this.i < this.src.length && this.src[this.i] !== "\n") this.i++;
+        this.i++;
+        continue;
       }
-      else if (ch === "/" && this.src[this.i + 1] === "*") {
+      if (ch === '"' || ch === "'" || ch === "`") { inString = ch; this.i++; continue; }
+      if (ch === "/" && this.src[this.i + 1] === "/") {
+        while (this.i < this.src.length && this.src[this.i] !== "\n") this.i++;
+        continue;
+      }
+      if (ch === "/" && this.src[this.i + 1] === "*") {
         this.i += 2;
         while (this.i < this.src.length - 1 && !(this.src[this.i] === "*" && this.src[this.i + 1] === "/")) this.i++;
         this.i += 2;
+        continue;
       }
-      else if (ch === open) depth++;
-      else if (ch === close) {
+      if (ch === open) {
+        depth++;
+      } else if (ch === close) {
         depth--;
-        if (depth === 0) { const code = this.src.slice(start, this.i).trim(); this.i++; return code; }
+        if (depth === 0) {
+          this.i++;
+          const code = this.src.slice(start, this.i - 1).trim();
+          return code;
+        }
       }
       this.i++;
     }
