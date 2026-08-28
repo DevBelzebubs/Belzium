@@ -62,7 +62,7 @@ const collectionHandlers: ProxyHandler<object> = {
       return (mapKey: PropertyKey) => {
         const value = target.get(mapKey);
         track(target, mapKey);
-        return value;
+        return toReactive(value);
       };
     }
     if (
@@ -111,7 +111,7 @@ const collectionHandlers: ProxyHandler<object> = {
       };
     }
     if (
-      (target instanceof Map && (key === "keys" || key === "entries")) ||
+      (target instanceof Map && key === "keys") ||
       (target instanceof Set && (key === "keys" || key === "values"))
     ) {
       // Los iteradores nativos se pueden usar sobre el objeto crudo y solo trackean la iteración (reaccionan a ADD/DELETE)
@@ -126,6 +126,9 @@ const collectionHandlers: ProxyHandler<object> = {
         return () =>
           mapIterator(target, key === "values" ? "values" : "entries");
       }
+    }
+    if (key === "entries" && target instanceof Map) {
+      return () => mapIterator(target, "entries");
     }
     if (key === "forEach" && target instanceof Map) {
       return (
@@ -142,6 +145,45 @@ const collectionHandlers: ProxyHandler<object> = {
           callback(value, mapKey, receiver);
         });
       };
+    }
+    if (key === "clear") {
+      if (target instanceof Map) {
+        return () => {
+          const hadValues = target.size > 0;
+          target.clear();
+          if (hadValues) trigger(target, ITERATE_KEY as unknown as PropertyKey, "DELETE");
+        };
+      }
+      if (target instanceof Set) {
+        return () => {
+          const hadValues = target.size > 0;
+          target.clear();
+          if (hadValues) trigger(target, ITERATE_KEY as unknown as PropertyKey, "DELETE");
+        };
+      }
+    }
+    if (key === "entries" && target instanceof Set) {
+      return () => {
+        track(target, ITERATE_KEY);
+        return target.entries();
+      };
+    }
+    if (key === "forEach" && target instanceof Set) {
+      return (callback: (value: unknown, value2: unknown, set: Set<unknown>) => void, thisArg?: unknown) => {
+        track(target, ITERATE_KEY);
+        target.forEach((value) => {
+          track(target, value as PropertyKey);
+          callback.call(thisArg, value, value, receiver);
+        }, thisArg);
+      };
+    }
+    if (key === Symbol.iterator) {
+      if (target instanceof Set) {
+        return () => {
+          track(target, ITERATE_KEY);
+          return target[Symbol.iterator]();
+        };
+      }
     }
     return Reflect.get(target, key, receiver);
   },

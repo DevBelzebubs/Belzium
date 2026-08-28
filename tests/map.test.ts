@@ -296,4 +296,70 @@ it("Deberia de trackear el forEach de Map con su key real", () => {
     ]);
 });
 
+it("Map.clear() should work and trigger ITERATE_KEY", () => {
+    const state = reactive(new Map([["a", 1], ["b", 2]]));
+    let size = 0;
+
+    effect(() => {
+        size = state.size;
+    });
+
+    expect(size).toBe(2);
+    state.clear();
+    expect(size).toBe(0);
+});
+
+it("Map.clear() should not trigger if map was empty", () => {
+    const state = reactive(new Map<string, number>());
+    let runs = 0;
+
+    effect(() => {
+        state.size;
+        runs++;
+    });
+
+    expect(runs).toBe(1);
+    state.clear();
+    expect(runs).toBe(1);
+});
+
+it("Map.entries() should react to SET on existing key", () => {
+    const state = reactive(new Map([["a", 1]]));
+    let entries: [string, number][] = [];
+
+    effect(() => {
+        entries = [...state.entries()];
+    });
+
+    expect(entries).toEqual([["a", 1]]);
+    state.set("a", 999);
+    expect(entries).toEqual([["a", 999]]);
+});
+
+it("Map.get() should return reactive objects (deep reactivity)", () => {
+    const state = reactive(new Map([["user", { name: "A" }]]));
+    let name = "";
+
+    effect(() => {
+        name = state.get("user")!.name;
+    });
+
+    expect(name).toBe("A");
+    state.get("user")!.name = "B";
+    expect(name).toBe("B");
+});
+
+it("Map.get() should return primitive values as-is", () => {
+    const state = reactive(new Map([["count", 42]]));
+    let count = 0;
+
+    effect(() => {
+        count = state.get("count") ?? 0;
+    });
+
+    expect(count).toBe(42);
+    state.set("count", 100);
+    expect(count).toBe(100);
+});
+
 });

@@ -116,4 +116,74 @@ it("Deberia reaccionar a la iteración del set key", () => {
     expect(values).toEqual([1, 2]);
 });
 
+it("should support for...of (Symbol.iterator)", () => {
+    const state = reactive(new Set<number>([1, 2, 3]));
+    let values: number[] = [];
+
+    effect(() => {
+        values = [];
+        for (const v of state) {
+            values.push(v);
+        }
+    });
+
+    expect(values).toEqual([1, 2, 3]);
+    state.add(4);
+    expect(values).toEqual([1, 2, 3, 4]);
+});
+
+it("should support forEach", () => {
+    const state = reactive(new Set<number>([1, 2, 3]));
+    let seen: number[] = [];
+
+    effect(() => {
+        seen = [];
+        state.forEach((v) => seen.push(v));
+    });
+
+    expect(seen).toEqual([1, 2, 3]);
+    state.add(4);
+    expect(seen).toEqual([1, 2, 3, 4]);
+});
+
+it("should support clear", () => {
+    const state = reactive(new Set<number>([1, 2, 3]));
+    let size = 0;
+
+    effect(() => {
+        size = state.size;
+    });
+
+    expect(size).toBe(3);
+    state.clear();
+    expect(size).toBe(0);
+});
+
+it("should support entries", () => {
+    const state = reactive(new Set<number>([1, 2]));
+    let entries: [number, number][] = [];
+
+    effect(() => {
+        entries = [...state.entries()];
+    });
+
+    expect(entries).toEqual([[1, 1], [2, 2]]);
+    state.add(3);
+    expect(entries).toEqual([[1, 1], [2, 2], [3, 3]]);
+});
+
+it("clear should not trigger if set was empty", () => {
+    const state = reactive(new Set<number>());
+    let runs = 0;
+
+    effect(() => {
+        state.size;
+        runs++;
+    });
+
+    expect(runs).toBe(1);
+    state.clear();
+    expect(runs).toBe(1);
+});
+
 });
