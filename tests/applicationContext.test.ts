@@ -734,7 +734,7 @@ it("Deberia rechazar singleton indirecto a dependencias scoped", () => {
             SingletonA
         )
     ).toThrow(
-        /scoped dependency/i
+        /Invalid dependency scope/i
     );
 });
 it("Deberia registrar configuración de clases", () => {
@@ -816,5 +816,41 @@ it("Deberia resolver tokens tipados", () => {
         .toBe(
             "https://api.example.com"
         );
+});
+
+it("Deberia rechazar SINGLETON → TRANSIENT → SCOPED (transitive)", () => {
+    class RequestContext {}
+    class Helper {
+        constructor(public request: RequestContext) {}
+    }
+    class AppService {
+        constructor(public helper: Helper) {}
+    }
+
+    const ctx = new ApplicationContext();
+
+    ctx.registerProvider({
+        token: RequestContext,
+        useClass: RequestContext,
+        scope: Scope.SCOPED,
+    });
+
+    ctx.registerProvider({
+        token: Helper,
+        useClass: Helper,
+        scope: Scope.TRANSIENT,
+        dependencies: [RequestContext],
+    });
+
+    ctx.registerProvider({
+        token: AppService,
+        useClass: AppService,
+        scope: Scope.SINGLETON,
+        dependencies: [Helper],
+    });
+
+    expect(() => ctx.resolve(AppService)).toThrow(
+        /Invalid dependency scope/,
+    );
 });
 });

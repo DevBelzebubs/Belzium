@@ -353,19 +353,21 @@ export class ApplicationContext {
   }
 // Recorre el grafo de dependencias de un SINGLETON
 // para detectar dependencias SCOPED directas o indirectas.
-private validateScopeGraph(token: InjectionToken,visited = new Set<InjectionToken>()): void {
+private validateScopeGraph(token: InjectionToken,visited = new Set<InjectionToken>(),rootScope?: Scope): void {
     if (visited.has(token)) return;
     visited.add(token);
     const provider = this.findProvider(token);
     if (!provider)  return;
     const scope = this.getProviderScope(token);
-    if (scope !== Scope.SINGLETON) return;
-    
+    const effectiveRoot = rootScope ?? scope;
+
+    if (effectiveRoot === Scope.SINGLETON && scope === Scope.SCOPED) {
+      throw new Error(`Invalid dependency scope: SINGLETON provider cannot depend on SCOPED provider (transitive)`);
+    }
+
     const dependencies = "dependencies" in provider ? provider.dependencies ?? [] : [];
     for (const dependency of dependencies) {
-        const dependencyScope = this.getProviderScope(dependency);
-        if (dependencyScope === Scope.SCOPED) throw new Error(`Invalid dependency scope: SINGLETON provider cannot depend on SCOPED provider (scoped dependency)`);
-        this.validateScopeGraph(dependency,visited);
+        this.validateScopeGraph(dependency, visited, effectiveRoot);
     }
 }
   // Obtiene el scope de un provider.
