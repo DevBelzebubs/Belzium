@@ -2,9 +2,6 @@ import type {
   ProgramNode,
   TopLevelNode,
   PassthroughNode,
-  AnnotatedClassNode,
-  DecoratorNode,
-  RenderBlock,
   TemplateNode,
   ElementNode,
   FragmentNode,
@@ -32,59 +29,9 @@ function emitTopLevel(node: TopLevelNode): string {
   switch (node.type) {
     case "Passthrough":
       return node.code;
-    case "AnnotatedClass":
-      return emitAnnotatedClass(node);
     default:
       return emitTemplateNode(node as TemplateNode);
   }
-}
-
-function emitAnnotatedClass(node: AnnotatedClassNode): string {
-  let out = "";
-  for (const dec of node.decorators) {
-    out += emitDecorator(dec);
-  }
-  if (node.renderMethod) {
-    const renderStart = node.renderMethod.start;
-    const bodyCode = node.body;
-    const bodyStart = bodyCode.indexOf("{", bodyCode.indexOf("class"));
-    const preRender = bodyCode.slice(0, bodyStart + 1);
-    const renderBodyCode = bodyCode.slice(renderStart);
-    const methodEnd = findMethodEnd(renderBodyCode);
-    const postRender = renderBodyCode.slice(methodEnd);
-    out += preRender;
-    out += "render() { return (\n      ";
-    out += emitChildren(node.renderMethod.children);
-    out += "\n    ); }";
-    out += postRender;
-  } else {
-    out += node.body;
-  }
-  return out;
-}
-
-function findMethodEnd(code: string): number {
-  let depth = 0;
-  let inString: string | null = null;
-  for (let i = 0; i < code.length; i++) {
-    const ch = code[i];
-    if (inString) {
-      if (ch === "\\") { i++; continue; }
-      if (ch === inString) inString = null;
-      continue;
-    }
-    if (ch === '"' || ch === "'" || ch === "`") { inString = ch; continue; }
-    if (ch === "{") depth++;
-    else if (ch === "}") {
-      depth--;
-      if (depth === 0) return i + 1;
-    }
-  }
-  return code.length;
-}
-
-function emitDecorator(node: DecoratorNode): string {
-  return `@${node.name}${node.args ?? "()"}\n`;
 }
 
 function emitChildren(nodes: TemplateNode[]): string {
@@ -124,16 +71,16 @@ function emitExpression(node: ExpressionNode): string {
   return `text(String(${node.expression}))`;
 }
 
-function emitIf(node: IfDirectiveNode): string {
+function emitIf(node: IfDirectiveNode, spread = true): string {
   let expr = `(${node.condition}) ? [${emitChildren(node.consequent)}] : `;
   if (node.alternate === null) {
     expr += "[]";
   } else if (Array.isArray(node.alternate)) {
     expr += `[${emitChildren(node.alternate)}]`;
   } else {
-    expr += emitIf(node.alternate);
+    expr += emitIf(node.alternate, false);
   }
-  return `...(${expr})`;
+  return spread ? `...(${expr})` : `(${expr})`;
 }
 
 function emitFor(node: ForDirectiveNode): string {
@@ -146,7 +93,7 @@ function emitFor(node: ForDirectiveNode): string {
     childElement = meaningful[0];
   } else {
     childElement = {
-      type: "Element", tag: "", isComponent: false,
+      type: "Element", tag: "div", isComponent: false,
       attributes: [], children: node.children,
       start: 0, end: 0,
     };

@@ -2,8 +2,7 @@
 //
 // Cada nodo representa una construcción del lenguaje .bel:
 // elementos JSX, texto, interpolaciones, directivas de plantilla
-// (<if>, <for>, <switch>), decoradores, y código TypeScript
-// que pasa sin modificar.
+// (<if>, <for>, <switch>), y código TypeScript que pasa sin modificar.
 //
 // Todos los nodos incluyen `start` y `end` (offsets en el source original)
 // para habilitar source maps, errores con línea/columna, y tooling.
@@ -44,59 +43,8 @@ export interface PassthroughNode extends Loc {
   code: string;
 }
 
-/**
- * Clase anotada con un decorador Belzium (@Component, @UI, @Store, etc.)
- * que contiene un método render() o template() con JSX.
- *
- * Ejemplo:
- *   @Component()
- *   class Counter {
- *     count = ref(0);
- *     render() { return <div>{this.count.value}</div>; }
- *   }
- */
-export interface AnnotatedClassNode extends Loc {
-  type: "AnnotatedClass";
-  decorators: DecoratorNode[];
-  name: string;
-  /** El bloque render/template, o null si la clase no tiene template. */
-  renderMethod: RenderBlock | null;
-  /**
-   * El resto del class body (campos, métodos no-render) como passthrough.
-   * Se preserva tal cual en la salida.
-   */
-  body: string;
-}
-
-/**
- * Decorador aplicado a una clase.
- *
- * Ejemplo: `@Component({ selector: "counter" })`
- * Ejemplo: `@Store()`
- */
-export interface DecoratorNode extends Loc {
-  type: "Decorator";
-  /** Nombre del decorador: "Component", "UI", "Store", "Hook", "Directive", etc. */
-  name: string;
-  /**
-   * Argumentos raw del decorador, incluyendo paréntesis.
-   * Ejemplo: `({ selector: "counter" })` o `()` si no tiene args.
-   * null si es un decorator sin paréntesis (raro pero posible).
-   */
-  args: string | null;
-}
-
-/**
- * Bloque render() o template() de un componente.
- * Contiene los hijos del template (el árbol virtual).
- */
-export interface RenderBlock extends Loc {
-  type: "RenderBlock";
-  children: TemplateNode[];
-}
-
 // Tipo unión de todos los nodos de nivel superior.
-export type TopLevelNode = PassthroughNode | AnnotatedClassNode | TemplateNode;
+export type TopLevelNode = PassthroughNode | TemplateNode;
 
 // ============================================================
 // NODOS DE TEMPLATE (dentro de render())
