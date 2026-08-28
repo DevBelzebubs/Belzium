@@ -1,26 +1,33 @@
 
 type Job = () => void;
 
-const queue = new Set<Job>(); // Set para deduplicación
+let currentQueue = new Set<Job>();
+let nextQueue = new Set<Job>();
 
 let isFlushPending = false;
 
 export function queueJob(
     job: Job
 ): void {
-    queue.add(job); // Agrega el job al set de jobs (Esto evita que se agreguen jobs duplicados)
+    nextQueue.add(job);
     if (!isFlushPending) {
         isFlushPending = true;
-        queueMicrotask(flushJobs); // Programa la ejecución de flushJobs en la siguiente microtarea
+        queueMicrotask(flushJobs);
     }
 }
-function flushJobs(): void { // Ejecuta todos los jobs en la cola y limpia la cola después de ejecutarlos
+function flushJobs(): void {
     try {
-        for (const job of queue) { // Itera jobs
-            job();
+        while (nextQueue.size > 0) {
+            const pending = nextQueue;
+            nextQueue = currentQueue;
+            currentQueue = pending;
+
+            for (const job of currentQueue) {
+                job();
+            }
+            currentQueue.clear();
         }
     } finally {
-        queue.clear(); // Limpia la cola de jobs
         isFlushPending = false;
     }
 }
