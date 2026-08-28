@@ -8,13 +8,14 @@ import {
   type SourcePosition,
 } from "./languageService";
 
-const DIRECTIVE_KEYWORDS = [
-  "if",
-  "else",
-  "for",
-  "switch",
-  "case",
-  "default",
+const DIRECTIVE_TAGS = [
+  { name: "if", insert: '<if condition={}>' },
+  { name: "else-if", insert: '<else-if condition={}>' },
+  { name: "else", insert: '<else>' },
+  { name: "for", insert: '<for each={item of items}>' },
+  { name: "switch", insert: '<switch value={}>' },
+  { name: "case", insert: '<case test={}>' },
+  { name: "default", insert: '<default>' },
 ];
 
 const DIAGNOSTICS_DEBOUNCE_MS = 300;
@@ -70,26 +71,26 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
   );
 
-  // Completions de directivas @ (TS no conoce el marcador @).
+  // Completions de directivas XML (TS no conoce estas etiquetas).
   context.subscriptions.push(
     vscode.languages.registerCompletionItemProvider(
       "bel",
       {
         provideCompletionItems(document, position) {
           const line = document.lineAt(position).text;
-          if (!line.slice(0, position.character).endsWith("@")) return [];
+          if (!line.slice(0, position.character).endsWith("<")) return [];
 
-          return DIRECTIVE_KEYWORDS.map((keyword) => {
+          return DIRECTIVE_TAGS.map((tag) => {
             const item = new vscode.CompletionItem(
-              `@${keyword}`,
+              tag.name,
               vscode.CompletionItemKind.Keyword,
             );
-            item.insertText = `@${keyword} (`;
+            item.insertText = new vscode.SnippetString(tag.insert);
             return item;
           });
         },
       },
-      "@",
+      "<",
     ),
   );
 

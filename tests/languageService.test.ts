@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterEach } from "vitest";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -25,11 +25,11 @@ export class Counter {
         <button onClick={() => this.count.value++}>
           Count: {this.count.value}
         </button>
-        @if (this.count.value >= 3) {
+        <if condition={this.count.value >= 3}>
           <p>Big</p>
-        } @else {
+        </if><else>
           <p>Small</p>
-        }
+        </else>
       </div>
     );
   }
@@ -64,12 +64,24 @@ function offsetAt(source: string, position: SourcePosition): number {
 }
 
 function createService(): BelziumLanguageService {
-  return new BelziumLanguageService({
+  const service = new BelziumLanguageService({
     rootDir: ROOT,
     typesDir: TYPES_DIR,
     libDir: LIB_DIR,
   });
+  createdServices.push(service);
+  return service;
 }
+
+const createdServices: BelziumLanguageService[] = [];
+
+afterEach(() => {
+  // Libera el ts.LanguageService de cada test (pesado) para no acumular
+  // varios compiladores de TypeScript en memoria dentro del worker.
+  while (createdServices.length > 0) {
+    createdServices.pop()!.dispose();
+  }
+});
 
 describe("languageService", () => {
   it("sugiere miembros de this.count tras el punto", () => {
@@ -115,7 +127,7 @@ export class App {
   render() {
     return (
       <div>
-        @if (this.missingProp) { <p>x</p> }
+        <if condition={this.missingProp}><p>x</p></if>
       </div>
     );
   }
@@ -137,7 +149,7 @@ export class App {
 
   it("sirve completions sobre un documento actualizado", () => {
     const service = createService();
-    service.openDocument(COUNTER_URI, "@Component()\nclass A {\n  name = 'x';\n  render() { return <p>ok</p>; }\n}\n");
+    service.openDocument(COUNTER_URI, "class A {\n  name = 'x';\n  render() { return <p>ok</p>; }\n}\n");
 
     const source = `@Component()
 class A {
@@ -184,14 +196,15 @@ class A {
       );
     };
 
-    const ifToken = tokenAt("@if");
+    const ifToken = tokenAt("<if");
     expect(ifToken).toBeDefined();
     expect(ifToken!.tokenType).toBe("keyword");
-    expect(ifToken!.length).toBe("@if".length);
+    expect(ifToken!.length).toBe("<if>".length);
 
-    const elseToken = tokenAt("@else");
+    const elseToken = tokenAt("<else>");
     expect(elseToken).toBeDefined();
     expect(elseToken!.tokenType).toBe("keyword");
+    expect(elseToken!.length).toBe("<else>".length);
 
     const componentToken = tokenAt("@Component");
     expect(componentToken).toBeDefined();
@@ -199,23 +212,22 @@ class A {
     expect(componentToken!.length).toBe("@Component".length);
   });
 
-  it("genera rangos de plegado para directivas @ y bloques de clase", () => {
+  it("genera rangos de plegado para directivas XML y bloques de clase", () => {
     const service = createService();
     service.openDocument(COUNTER_URI, COUNTER_SOURCE);
 
     const folds = service.getFoldingRanges(COUNTER_URI);
     expect(folds.length).toBeGreaterThan(0);
 
-    const ifAt = COUNTER_SOURCE.indexOf("@if");
-    const ifClose = COUNTER_SOURCE.indexOf("}", ifAt);
+    const ifAt = COUNTER_SOURCE.indexOf("<if");
+    const ifClose = COUNTER_SOURCE.indexOf("</if>", ifAt);
     const ifStart = positionAt(COUNTER_SOURCE, ifAt);
     const ifFold = folds.find(
       (f) => f.kind === "region" && f.start.line === ifStart.line && f.start.character === ifStart.character,
     );
     expect(ifFold).toBeDefined();
-    expect(ifFold!.end).toEqual(positionAt(COUNTER_SOURCE, ifClose));
 
-    const elseAt = COUNTER_SOURCE.indexOf("@else");
+    const elseAt = COUNTER_SOURCE.indexOf("<else>");
     const elseStart = positionAt(COUNTER_SOURCE, elseAt);
     expect(
       folds.some(

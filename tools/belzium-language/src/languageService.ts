@@ -91,13 +91,23 @@ const MARKER_TOKEN_TYPES: Record<MarkerKind, string> = {
   custom: "type",
 };
 
-// Longitud en caracteres de `@nombre` en el source a partir del offset del '@'.
-function atNameLength(source: string, at: number): number {
-  if (source[at] !== "@") return 0;
-  let i = at + 1;
-  if (!/[A-Za-z_$]/.test(source[i] ?? "")) return 0;
-  while (i < source.length && /[A-Za-z0-9$-]/.test(source[i])) i++;
-  return i - at;
+// Longitud del marcador en el source a partir del offset indicado.
+// XML directives start with `<tagname>`, decorators with `@name`.
+function markerNameLength(source: string, offset: number): number {
+  const ch = source[offset];
+  if (ch === "<") {
+    let i = offset + 1;
+    if (!/[A-Za-z]/.test(source[i] ?? "")) return 0;
+    while (i < source.length && /[A-Za-z0-9-]/.test(source[i])) i++;
+    return i - offset + 1; // incluye el '<' + nombre + '>'
+  }
+  if (ch === "@") {
+    let i = offset + 1;
+    if (!/[A-Za-z_$]/.test(source[i] ?? "")) return 0;
+    while (i < source.length && /[A-Za-z0-9$-]/.test(source[i])) i++;
+    return i - offset;
+  }
+  return 0;
 }
 
 export class BelziumLanguageService {
@@ -115,6 +125,15 @@ export class BelziumLanguageService {
       opts.libDir,
       ts.getDefaultLibFileName(COMPILATION_SETTINGS),
     );
+  }
+
+  // Libera el ts.LanguageService cargado (pesado, incluye el compilador TS)
+  // y los documentos mantenidos en memoria. Interno del framework para que
+  // los tests puedan soltar la memoria sin esperar al GC.
+  dispose(): void {
+    this.service = null;
+    this.docs.clear();
+    this.pathToUri.clear();
   }
 
   // ------------------------------------------------------------------
@@ -269,7 +288,7 @@ export class BelziumLanguageService {
     const tokens: BelSemanticToken[] = [];
     for (const marker of state.virtual.markers) {
       const tokenType = MARKER_TOKEN_TYPES[marker.kind];
-      const nameLen = atNameLength(state.source, marker.s);
+      const nameLen = markerNameLength(state.source, marker.s);
       if (nameLen <= 0) continue;
       tokens.push({
         start: this.toSourcePosition(state.source, marker.s),
