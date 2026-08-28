@@ -389,6 +389,9 @@ function patchKeyedChildren(
   // a su nodo real
   const oldKeyToNode = new Map<VNodeKey, Node>();
 
+  // Cola de nodos DOM de hijos old sin key (capturados antes de reordenar)
+  const oldUnkeyedNodes: { vnode: VNode; domNode: Node }[] = [];
+
   oldChildren.forEach((child, index) => {
     if (child.key !== undefined) {
       oldKeyToVNode.set(child.key, child);
@@ -398,6 +401,11 @@ function patchKeyedChildren(
       if (node) {
         oldKeyToNode.set(child.key, node);
       }
+    } else {
+      const domNode = container.childNodes[index];
+      if (domNode) {
+        oldUnkeyedNodes.push({ vnode: child, domNode });
+      }
     }
   });
 
@@ -405,8 +413,29 @@ function patchKeyedChildren(
   for (let newIndex = 0; newIndex < newChildren.length; newIndex++) {
     const newChild = newChildren[newIndex];
 
-    const oldVNode =
-      newChild.key !== undefined ? oldKeyToVNode.get(newChild.key) : undefined;
+    if (newChild.key === undefined) {
+      // Hijo sin key: buscar siguiente old unkeyed sin usar
+      const entry = oldUnkeyedNodes.length > 0 && oldUnkeyedNodes[0].vnode.type === newChild.type && oldUnkeyedNodes[0].vnode.key === undefined
+        ? oldUnkeyedNodes.shift()
+        : undefined;
+      if (entry) {
+        const patchedNode = patchNode(entry.vnode, newChild, entry.domNode, context);
+        if (patchedNode !== entry.domNode) {
+          container.insertBefore(patchedNode, entry.domNode);
+          container.removeChild(entry.domNode);
+        }
+        if (container.childNodes[newIndex] !== patchedNode) {
+          container.insertBefore(patchedNode, container.childNodes[newIndex] ?? null);
+        }
+        continue;
+      }
+      // No hay match: crear nuevo nodo
+      const newNode = createElement(newChild, context);
+      container.insertBefore(newNode, container.childNodes[newIndex] ?? null);
+      continue;
+    }
+
+    const oldVNode = oldKeyToVNode.get(newChild.key);
 
     // No existía:
     // crea e inserta un nuevo nodo
@@ -466,6 +495,13 @@ function patchKeyedChildren(
 
     if (oldNode && oldNode.parentNode) {
       oldNode.parentNode.removeChild(oldNode);
+    }
+  }
+
+  // Elimina hijos unkeyed que sobraron sin match
+  for (const entry of oldUnkeyedNodes) {
+    if (entry.domNode.parentNode) {
+      entry.domNode.parentNode.removeChild(entry.domNode);
     }
   }
 }
@@ -771,6 +807,27 @@ function updateComponent(
   // Actualiza las props manteniendo
   // la identidad del objeto reactivo
   updateProps(props.target, (newVNode.props ?? {}) as Record<string, unknown>);
+
+  // Crea getters para props nuevas que
+  // no existían durante el montaje inicial.
+  for (const key of Object.keys(props.target)) {
+    if (key in component.instance) continue;
+    Object.defineProperty(component.instance, key, {
+      get: () => props.readonly[key],
+      configurable: true,
+    });
+  }
+
+  // Recalcula la variante @UI si la prop
+  // variant cambió durante la actualización.
+  const uiVariants = getComponentMetadata(oldVNode.type as ComponentConstructor)?.variants;
+  const newVariantName = newVNode.props?.variant;
+  if (uiVariants && newVariantName != null) {
+    (component.instance as RenderableComponent & { variant?: Record<string, unknown> })
+      .variant = uiVariants[String(newVariantName)];
+  } else if (newVariantName == null) {
+    delete (component.instance as RenderableComponent & { variant?: Record<string, unknown> }).variant;
+  }
 
   // Refleja los nuevos valores en los inputs
   // declarados en la instancia. El ref interno

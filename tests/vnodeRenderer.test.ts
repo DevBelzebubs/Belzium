@@ -1136,4 +1136,70 @@ describe("Component API integration", () => {
 
   expect(container.textContent).toBe("10");
 });
+
+it("should handle mixed keyed and unkeyed siblings (unkeyed reused)", () => {
+  const container = document.createElement("div");
+
+  const oldTree = h("div", null, [
+    h("span", { key: "a" }, [text("A")]),
+    h("em", null, [text("em1")]),
+    h("b", { key: "b" }, [text("B")]),
+  ]);
+
+  patch(null, oldTree, container, 0);
+  expect(container.textContent).toBe("Aem1B");
+
+  const emNode = container.querySelector("em")!;
+
+  const newTree = h("div", null, [
+    h("b", { key: "b" }, [text("B2")]),
+    h("em", null, [text("em2")]),
+    h("span", { key: "a" }, [text("A2")]),
+  ]);
+
+  patch(oldTree, newTree, container, 0);
+
+  expect(container.textContent).toBe("B2em2A2");
+
+  // El nodo em debe ser el mismo objeto DOM (reused, no recreado)
+  expect(container.querySelector("em")).toBe(emNode);
+});
+
+it("should handle adding unkeyed child to keyed list", () => {
+  const container = document.createElement("div");
+
+  const oldTree = h("div", null, [
+    h("span", { key: "a" }, [text("A")]),
+  ]);
+
+  patch(null, oldTree, container, 0);
+  expect(container.textContent).toBe("A");
+
+  const newTree = h("div", null, [
+    h("span", { key: "a" }, [text("A")]),
+    h("em", null, [text("new")]),
+  ]);
+
+  patch(oldTree, newTree, container, 0);
+  expect(container.textContent).toBe("Anew");
+});
+
+it("should handle removing unkeyed child from keyed list", () => {
+  const container = document.createElement("div");
+
+  const oldTree = h("div", null, [
+    h("span", { key: "a" }, [text("A")]),
+    h("em", null, [text("em")]),
+  ]);
+
+  patch(null, oldTree, container, 0);
+  expect(container.textContent).toBe("Aem");
+
+  const newTree = h("div", null, [
+    h("span", { key: "a" }, [text("A")]),
+  ]);
+
+  patch(oldTree, newTree, container, 0);
+  expect(container.textContent).toBe("A");
+});
 });
