@@ -34,6 +34,8 @@ describe("onUpdated", () => {
 
     expect(updatedCalls).toBe(1);
     expect(document.querySelector("#app")!.textContent).toBe("1");
+
+    app.unmount();
   });
 
   it("observa el DOM ya actualizado", () => {
@@ -61,5 +63,7 @@ describe("onUpdated", () => {
     instance.count.value = 2;
 
     expect(seen).toBe("2");
+
+    app.unmount();
   });
 });

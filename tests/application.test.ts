@@ -639,6 +639,8 @@ describe("createApp", () => {
             .toBe(
                 "<div>Hello Belzium</div>"
             );
+
+        app.unmount();
     });
 
 
@@ -673,6 +675,8 @@ describe("createApp", () => {
             .toBe(
                 "<span>Belzium</span>"
             );
+
+        app.unmount();
     });
 
 
@@ -726,6 +730,8 @@ describe("createApp", () => {
         }).toThrow(
             "Application is already mounted"
         );
+
+        app.unmount();
     });
 
 

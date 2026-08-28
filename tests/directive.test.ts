@@ -82,5 +82,7 @@ describe("Directive", () => {
     app.mount("#app");
 
     expect(document.querySelector("#app")!.textContent).toBe("Click");
+
+    app.unmount();
   });
 });

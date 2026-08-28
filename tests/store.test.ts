@@ -99,6 +99,9 @@ describe("Store", () => {
     useStore(CounterStore).count = 3;
 
     expect(element.textContent).toBe("3");
+
+    app.unmount();
+    resetStores();
   });
 
   it("resetStores limpia las instancias", () => {

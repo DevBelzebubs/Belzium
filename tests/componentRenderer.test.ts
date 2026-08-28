@@ -27,7 +27,7 @@ describe("ComponentRenderer", () => {
     const element = document.createElement("div");
     const renderer = new ComponentRenderer();
 
-    renderer.mount(Counter, instance, element);
+    renderer.mount(Counter, instance, element).dispose();
 
     expect(element.innerHTML).toContain("0");
   });
@@ -50,13 +50,15 @@ describe("ComponentRenderer", () => {
 
     const renderer = new ComponentRenderer();
 
-    renderer.mount(Counter, instance, element);
+    const mounted = renderer.mount(Counter, instance, element);
 
     expect(element.innerHTML).toContain("0");
 
     instance.count.value = 10;
 
     expect(element.innerHTML).toContain("10");
+
+    mounted.dispose();
   });
 
   it("Deberia parar de reaccionar despues de destruirse", () => {
@@ -145,7 +147,7 @@ describe("ComponentRenderer", () => {
 
     const renderer = new ComponentRenderer();
 
-    renderer.mount(Counter, instance, container);
+    const mounted = renderer.mount(Counter, instance, container);
 
     const originalElement = container.firstElementChild;
 
@@ -154,6 +156,8 @@ describe("ComponentRenderer", () => {
     expect(container.firstElementChild).toBe(originalElement);
 
     expect(container.textContent).toBe("1");
+
+    mounted.dispose();
   });
   it("should update a component through its own Pulse effect", () => {
     @Component({
@@ -221,13 +225,15 @@ describe("ComponentRenderer", () => {
 
     const renderer = new ComponentRenderer(context);
 
-    renderer.mount(Counter, instance, container);
+    const mounted = renderer.mount(Counter, instance, container);
 
     const originalElement = container.firstElementChild;
 
     instance.count.value = 1;
 
     expect(container.firstElementChild).toBe(originalElement);
+
+    mounted.dispose();
   });
   it("detiene la reactividad del componente al hacer dispose", () => {
     document.body.innerHTML = `<div id="app"></div>`;

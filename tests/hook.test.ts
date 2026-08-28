@@ -102,6 +102,8 @@ describe("Hook", () => {
     instance.hook.count.value = 7;
 
     expect(element.textContent).toBe("7");
+
+    app.unmount();
   });
 
   it("ejecuta onUnmounted del hook cuando el consumidor se desmonta", () => {
