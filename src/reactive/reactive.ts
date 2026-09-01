@@ -123,6 +123,9 @@ const collectionHandlers: ProxyHandler<object> = {
       // Los iteradores nativos se pueden usar sobre el objeto crudo y solo trackean la iteración (reaccionan a ADD/DELETE)
       return () => {
         track(target, ITERATE_KEY);
+        if (target instanceof Set) {
+          return reactiveIterator(target[key]());
+        }
         return target[key]();
       };
     }
@@ -148,7 +151,7 @@ const collectionHandlers: ProxyHandler<object> = {
         target.forEach((value, mapKey) => {
           // Se trackea la key para que un SET dispare el efecto, igual que mapIterator
           track(target, mapKey as PropertyKey);
-          callback(value, mapKey, receiver);
+          callback(toReactive(value), mapKey, receiver);
         });
       };
     }
@@ -189,7 +192,7 @@ const collectionHandlers: ProxyHandler<object> = {
         track(target, ITERATE_KEY);
         target.forEach((value) => {
           track(target, value as PropertyKey);
-          callback.call(thisArg, value, value, receiver);
+          callback.call(thisArg, toReactive(value), toReactive(value), receiver);
         }, thisArg);
       };
     }
@@ -197,7 +200,7 @@ const collectionHandlers: ProxyHandler<object> = {
       if (target instanceof Set) {
         return () => {
           track(target, ITERATE_KEY);
-          return target[Symbol.iterator]();
+          return reactiveIterator(target[Symbol.iterator]());
         };
       }
     }
@@ -230,6 +233,20 @@ function isSet(value: unknown): value is Set<unknown> {
   return value instanceof Set;
 }
 
+function reactiveIterator<T>(iterator: Iterator<T>): Iterator<T> {
+  // Envuelve un iterador nativo para que cada valor emitido pase por toReactive
+  return {
+    next() {
+      const result = iterator.next();
+      if (result.done) return result;
+      return { value: toReactive(result.value), done: false };
+    },
+    [Symbol.iterator]() {
+      return this;
+    },
+  } as Iterator<T>;
+}
+
 function mapIterator( // Trackea cada key de manera individual durante la iteración
   target: Map<unknown, unknown>,
   kind: "keys" | "values" | "entries",
@@ -244,8 +261,8 @@ function mapIterator( // Trackea cada key de manera individual durante la iterac
       yield kind === "keys" // Hace yield solo de lo que pide el kind
         ? mapKey
         : kind === "values"
-          ? mapValue
-          : [mapKey, mapValue];
+          ? toReactive(mapValue)
+          : [mapKey, toReactive(mapValue)];
     }
   })();
 }

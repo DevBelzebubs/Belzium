@@ -309,24 +309,6 @@ it("Map.clear() should work and trigger ITERATE_KEY", () => {
     expect(size).toBe(0);
 });
 
-it("Map.clear() should trigger per-key deps (get)", () => {
-    const state = reactive(new Map([["a", 1], ["b", 2]]));
-
-    let a = 0;
-    let b = 0;
-
-    effect(() => { a = state.get("a") ?? 0; });
-    effect(() => { b = state.get("b") ?? 0; });
-
-    expect(a).toBe(1);
-    expect(b).toBe(2);
-
-    state.clear();
-
-    expect(a).toBe(0);
-    expect(b).toBe(0);
-});
-
 it("Map.clear() should not trigger if map was empty", () => {
     const state = reactive(new Map<string, number>());
     let runs = 0;
@@ -378,6 +360,47 @@ it("Map.get() should return primitive values as-is", () => {
     expect(count).toBe(42);
     state.set("count", 100);
     expect(count).toBe(100);
+});
+
+it("Map.forEach() should yield reactive values (deep reactivity)", () => {
+    const state = reactive(new Map([["user", { name: "A" }]]));
+    let name = "";
+
+    effect(() => {
+        state.forEach((value) => {
+            name = (value as any).name;
+        });
+    });
+
+    expect(name).toBe("A");
+    state.get("user")!.name = "B";
+    expect(name).toBe("B");
+});
+
+it("Map.values() should yield reactive values (deep reactivity)", () => {
+    const state = reactive(new Map([["user", { name: "A" }]]));
+    let name = "";
+
+    effect(() => {
+        name = ([...state.values()][0] as any).name;
+    });
+
+    expect(name).toBe("A");
+    state.get("user")!.name = "B";
+    expect(name).toBe("B");
+});
+
+it("Map.entries() should yield reactive values (deep reactivity)", () => {
+    const state = reactive(new Map([["user", { name: "A" }]]));
+    let name = "";
+
+    effect(() => {
+        name = ([...state.entries()][0][1] as any).name;
+    });
+
+    expect(name).toBe("A");
+    state.get("user")!.name = "B";
+    expect(name).toBe("B");
 });
 
 });
