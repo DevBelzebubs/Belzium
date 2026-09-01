@@ -155,16 +155,26 @@ const collectionHandlers: ProxyHandler<object> = {
     if (key === "clear") {
       if (target instanceof Map) {
         return () => {
-          const hadValues = target.size > 0;
-          target.clear();
-          if (hadValues) trigger(target, ITERATE_KEY as unknown as PropertyKey, "DELETE");
+          if (target.size > 0) {
+            // Se disparan las deps de cada key eliminada (además de la iteración)
+            const keys = [...target.keys()];
+            target.clear();
+            keys.forEach((mapKey) => {
+              trigger(target, mapKey as PropertyKey, "DELETE");
+            });
+          }
         };
       }
       if (target instanceof Set) {
         return () => {
-          const hadValues = target.size > 0;
-          target.clear();
-          if (hadValues) trigger(target, ITERATE_KEY as unknown as PropertyKey, "DELETE");
+          if (target.size > 0) {
+            // Se disparan las deps de cada valor eliminado (además de la iteración)
+            const values = [...target.values()];
+            target.clear();
+            values.forEach((value) => {
+              trigger(target, value as PropertyKey, "DELETE");
+            });
+          }
         };
       }
     }

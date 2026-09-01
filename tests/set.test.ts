@@ -172,6 +172,24 @@ it("should support entries", () => {
     expect(entries).toEqual([[1, 1], [2, 2], [3, 3]]);
 });
 
+it("Set.clear() should trigger per-value deps (has)", () => {
+    const state = reactive(new Set<number>([1, 2]));
+
+    let has1 = false;
+    let has2 = false;
+
+    effect(() => { has1 = state.has(1); });
+    effect(() => { has2 = state.has(2); });
+
+    expect(has1).toBe(true);
+    expect(has2).toBe(true);
+
+    state.clear();
+
+    expect(has1).toBe(false);
+    expect(has2).toBe(false);
+});
+
 it("clear should not trigger if set was empty", () => {
     const state = reactive(new Set<number>());
     let runs = 0;
