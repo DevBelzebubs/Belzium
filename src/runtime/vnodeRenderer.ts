@@ -372,6 +372,13 @@ function patchChildrenByIndex(
       context,
     );
   }
+
+  // Al reducir la lista, patch() con índice elimina el nodo
+  // en esa posición pero los nodos sobrantes del final quedan
+  // huérfanos (el índice apunta fuera del DOM). Se podan aquí.
+  while (container.childNodes.length > newChildren.length) {
+    container.removeChild(container.lastChild!);
+  }
 }
 
 // Actualiza hijos utilizando sus keys

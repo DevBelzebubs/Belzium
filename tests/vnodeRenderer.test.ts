@@ -1202,4 +1202,24 @@ it("should handle removing unkeyed child from keyed list", () => {
   patch(oldTree, newTree, container, 0);
   expect(container.textContent).toBe("A");
 });
+
+it("should remove trailing unkeyed children when the list shrinks", () => {
+  const container = document.createElement("div");
+
+  const oldTree = h("ul", null, [
+    h("li", null, [text("A")]),
+    h("li", null, [text("B")]),
+    h("li", null, [text("C")]),
+  ]);
+
+  patch(null, oldTree, container, 0);
+  expect(container.textContent).toBe("ABC");
+
+  const newTree = h("ul", null, [
+    h("li", null, [text("A")]),
+  ]);
+
+  patch(oldTree, newTree, container, 0);
+  expect(container.textContent).toBe("A");
+});
 });
