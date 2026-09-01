@@ -17,6 +17,7 @@ import type {
   SpreadAttributeNode,
   AttributeValueNode,
 } from "./nodes";
+import { CompileError } from "./errors";
 
 const KEYWORD_PRECEDE_EXPRESSION = new Set([
   "return", "throw", "case", "typeof", "instanceof",
@@ -31,6 +32,10 @@ export class ASTBuilder {
   private wordBuffer = "";
 
   constructor(private src: string) {}
+
+  private error(message: string, offset: number): never {
+    throw new CompileError(message, this.src, offset);
+  }
 
   build(): ProgramNode {
     const body: TopLevelNode[] = [];
@@ -107,7 +112,7 @@ export class ASTBuilder {
     if (tag === "for") return this.parseForElement(start);
     if (tag === "switch") return this.parseSwitchElement(start);
     if (tag === "else-if" || tag === "else") {
-      throw new Error(`<${tag}> must follow <if> or <else-if>`);
+      throw this.error(`<${tag}> must follow <if> or <else-if>`, start);
     }
 
     const isComponent = /^[A-Z]/.test(tag) || tag.includes(".");
@@ -256,15 +261,15 @@ export class ASTBuilder {
     const attributes = this.parseAttributes();
     const eachAttr = attributes.find(a => a.type === "Attribute" && a.name === "each") as NormalAttributeNode | undefined;
     if (!eachAttr || !eachAttr.value) {
-      throw new Error(`<for> requires an each attribute`);
+      throw this.error(`<for> requires an each attribute`, start);
     }
     if (eachAttr.value.type !== "Expression") {
-      throw new Error(`<for each> expects an expression {...}, e.g. each={item of items}`);
+      throw this.error(`<for each> expects an expression {...}, e.g. each={item of items}`, start);
     }
     const eachValue = eachAttr.value.source;
     const match = eachValue.match(/^([A-Za-z_$][\w$]*)\s+of\s+(.+)$/);
     if (!match) {
-      throw new Error(`Invalid <for> each syntax: expected "item of items"`);
+      throw this.error(`Invalid <for> each syntax: expected "item of items"`, start);
     }
 
     const keyAttr = attributes.find(a => a.type === "Attribute" && a.name === "key") as NormalAttributeNode | undefined;
@@ -299,7 +304,7 @@ export class ASTBuilder {
       if (child.type === "Element" && child.tag === "case") {
         const testAttr = child.attributes.find(a => a.type === "Attribute" && a.name === "test") as NormalAttributeNode | undefined;
         if (!testAttr || !testAttr.value) {
-          throw new Error(`<case> requires a test attribute`);
+          throw this.error(`<case> requires a test attribute`, child.start);
         }
         cases.push({
           type: "SwitchCase",
@@ -313,7 +318,7 @@ export class ASTBuilder {
       } else if (child.type === "Text" && !child.value) {
         // skip empty text
       } else {
-        throw new Error(`Only <case> and <default> allowed inside <switch>`);
+        throw this.error(`Only <case> and <default> allowed inside <switch>`, start);
       }
     }
 
@@ -324,7 +329,7 @@ export class ASTBuilder {
     const attributes = this.parseAttributes();
     const attr = attributes.find(a => a.type === "Attribute" && a.name === name) as NormalAttributeNode | undefined;
     if (!attr || !attr.value) {
-      throw new Error(`<...> requires a ${name} attribute`);
+      throw this.error(`<...> requires a ${name} attribute`, start);
     }
     return this.exprFromAttrValue(attr.value, role);
   }
@@ -345,7 +350,8 @@ export class ASTBuilder {
   // ── Helpers ─────────────────────────────────────────────────
 
   private readGroup(open: string, close: string): string {
-    if (this.src[this.i] !== open) throw new Error(`Expected "${open}"`);
+    if (this.src[this.i] !== open) throw this.error(`Expected "${open}"`, this.i);
+    const openPos = this.i;
     let inString: string | null = null;
     let depth = 1;
     const start = this.i + 1;
@@ -381,20 +387,21 @@ export class ASTBuilder {
       }
       this.i++;
     }
-    throw new Error(`Unbalanced "${open}${close}" in source`);
+    throw this.error(`Unbalanced "${open}${close}" in source`, openPos);
   }
 
   private readBraced(): string { return this.readGroup("{", "}"); }
 
   private readQuoted(): string {
     const quote = this.src[this.i];
+    const openPos = this.i;
     let j = this.i + 1;
     while (j < this.src.length) {
       if (this.src[j] === "\\") j += 2;
       else if (this.src[j] === quote) { const v = this.src.slice(this.i, j + 1); this.i = j + 1; return v; }
       else j++;
     }
-    throw new Error(`Unterminated string literal`);
+    throw this.error(`Unterminated string literal`, openPos);
   }
 
   private readRawText(): TextNode {
@@ -430,16 +437,17 @@ export class ASTBuilder {
   }
 
   private consumeClosingTag(tag: string): void {
+    const openPos = this.i;
     if (this.src[this.i] !== "<" || this.src[this.i + 1] !== "/") {
-      throw new Error(`Expected closing tag </${tag}>`);
+      throw this.error(`Expected closing tag </${tag}>`, openPos);
     }
     this.i += 2;
     if (tag) {
-      if (!this.src.startsWith(tag, this.i)) throw new Error(`Expected closing tag </${tag}>`);
+      if (!this.src.startsWith(tag, this.i)) throw this.error(`Expected closing tag </${tag}>`, this.i);
       this.i += tag.length;
     }
     this.skipWs();
-    if (this.src[this.i] !== ">") throw new Error(`Malformed closing tag </${tag}>`);
+    if (this.src[this.i] !== ">") throw this.error(`Malformed closing tag </${tag}>`, this.i);
     this.i++;
   }
 }

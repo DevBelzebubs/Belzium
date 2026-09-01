@@ -11,6 +11,7 @@ import {
 } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { compile } from "../src/compiler";
+import { CompileError } from "../src/compiler/errors";
 import { createApp } from "../src";
 import type { RenderableComponent } from "../src";
 
@@ -366,6 +367,65 @@ class App {
 }`)).toThrow(/each attribute/);
   });
 
+  it("lanza CompileError con linea, columna y snippet", () => {
+    const source = `@Component()
+class App {
+  render() {
+    return (
+      <div>
+        <for>
+          <p>Hi</p>
+        </for>
+      </div>
+    );
+  }
+}`;
+    try {
+      compile(source);
+      expect.unreachable("deberia lanzar");
+    } catch (err) {
+      expect(err).toBeInstanceOf(CompileError);
+      const e = err as CompileError;
+      expect(e.line).toBe(6);
+      expect(e.column).toBe(9);
+      expect(e.snippet).toContain("<for>");
+      expect(e.snippet).toContain("^");
+      expect(e.message).toContain("line 6");
+      expect(e.message).toContain("column 9");
+    }
+  });
+
+  it("reporta linea:columna en errores que antes no tenian posicion", () => {
+    const source = `@Component()
+class App {
+  render() {
+    return (<div id="abc>Hi</div>);
+  }
+}`;
+    try {
+      compile(source);
+      expect.unreachable("deberia lanzar");
+    } catch (err) {
+      expect(err).toBeInstanceOf(CompileError);
+      const e = err as CompileError;
+      expect(e.message).toMatch(/Unterminated/);
+      expect(e.line).toBe(4);
+      expect(e.column).toBeGreaterThan(0);
+    }
+  });
+
+  it("emite props con guion como claves string (data-*, aria-*)", () => {
+    const code = compile(`@Component()
+class App {
+  render() {
+    return <div data-id={this.id} aria-label="x" stroke-width={2}>Hi</div>;
+  }
+}`);
+    expect(code).toContain('"data-id": this.id');
+    expect(code).toContain('"aria-label": "x"');
+    expect(code).toContain('"stroke-width": 2');
+  });
+
   it("acepta literales string en <switch> y <case>", () => {
     const code = compile(`@Component()
 class App {
@@ -384,15 +444,19 @@ class App {
     expect(code).toContain("case \"ok\":");
   });
 
-  it("emite props con guion como claves string (data-*, aria-*)", () => {
-    const code = compile(`@Component()
+  it("da mensaje claro si <for each> recibe un string en vez de expresion", () => {
+    const source = `@Component()
 class App {
   render() {
-    return <div data-id={this.id} aria-label="x" stroke-width={2}>Hi</div>;
+    return <for each="x of items"><p>Hi</p></for>;
   }
-}`);
-    expect(code).toContain('"data-id": this.id');
-    expect(code).toContain('"aria-label": "x"');
-    expect(code).toContain('"stroke-width": 2');
+}`;
+    try {
+      compile(source);
+      expect.unreachable("deberia lanzar");
+    } catch (err) {
+      const e = err as CompileError;
+      expect(e.message).toMatch(/each.*expression/i);
+    }
   });
 });
