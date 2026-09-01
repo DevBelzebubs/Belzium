@@ -117,14 +117,38 @@ export interface TextNode extends Loc {
 }
 
 /**
- * Expresión interpolada: `{ expression }`.
- * Se compila como `text(String(expression))`.
+ * Rol semántico de una expresión dentro del template.
  *
- * Ejemplo: `{this.count.value}` → `text(String(this.count.value))`
+ * La capa de expression modela cualquier fragmento JS interpolado
+ * (dentro de `{}`) de forma unificada: un `ExpressionNode` guarda el
+ * texto raw balanceado en `source` y su `role` indica para qué se
+ * usa. El parser clasifica el rol una sola vez; el lowering consume
+ * el slot semántico y no necesita conocer la sintaxis del source.
+ */
+export type ExpressionRole =
+  | "text" // {expr} interpolación de texto
+  | "attrValue" // x={expr} atributo no-evento
+  | "eventHandler" // onX={expr} atributo cuyo nombre empieza con "on"
+  | "spread" // {..expr} spread de props
+  | "condition" // <if condition={expr}>
+  | "iterable" // <for each={x of expr}>
+  | "key" // <for key={expr}>
+  | "discriminant" // <switch value={expr}>
+  | "caseTest"; // <case test={expr}>
+
+/**
+ * Una expresión JS interpolada en el template.
+ *
+ * Se compila según su rol: texto → `text(String(source))`, valor de
+ * atributo o evento → `name: source`, spread → `...source`, etc.
+ *
+ * Ejemplo: `{this.count.value}` → `Expression { role: "text", source: "this.count.value" }`
  */
 export interface ExpressionNode extends Loc {
   type: "Expression";
-  expression: string;
+  role: ExpressionRole;
+  /** Texto JS raw balanceado (ya depurado por readGroup). */
+  source: string;
 }
 
 // ---- Atributos ----
@@ -141,6 +165,7 @@ export type AttributeNode = NormalAttributeNode | SpreadAttributeNode;
 export interface NormalAttributeNode extends Loc {
   type: "Attribute";
   name: string;
+  /** value es null para atributos booleanos. */
   value: AttributeValueNode | null;
 }
 
@@ -150,11 +175,11 @@ export interface NormalAttributeNode extends Loc {
  */
 export interface SpreadAttributeNode extends Loc {
   type: "SpreadAttribute";
-  expression: string;
+  spread: ExpressionNode;
 }
 
 /** Valor de un atributo normal. */
-export type AttributeValueNode = StringValueNode | ExpressionValueNode;
+export type AttributeValueNode = StringValueNode | ExpressionNode;
 
 /**
  * Valor de string literal: `class="active"`.
@@ -163,15 +188,6 @@ export type AttributeValueNode = StringValueNode | ExpressionValueNode;
 export interface StringValueNode extends Loc {
   type: "StringValue";
   value: string;
-}
-
-/**
- * Valor de expresión: `onClick={handler}`.
- * El valor es la expresión raw entre las llaves.
- */
-export interface ExpressionValueNode extends Loc {
-  type: "ExpressionValue";
-  expression: string;
 }
 
 // ---- Directivas de Plantilla ----
@@ -187,7 +203,7 @@ export interface ExpressionValueNode extends Loc {
  */
 export interface IfDirectiveNode extends Loc {
   type: "IfDirective";
-  condition: string;
+  condition: ExpressionNode;
   consequent: TemplateNode[];
   /**
    * - null: no hay rama alternativa
@@ -208,9 +224,9 @@ export interface ForDirectiveNode extends Loc {
   /** Variable de iteración: "n", "item", etc. */
   variable: string;
   /** Expresión del iterable: "this.items", "this.users", etc. */
-  iterable: string;
-  /** Key de iteración (atributo key): "n.id", "item.key", etc. null si no hay key. */
-  key: string | null;
+  iterable: ExpressionNode;
+  /** Key de iteración (atributo key), o null si no hay key. */
+  key: ExpressionNode | null;
   children: TemplateNode[];
 }
 
@@ -223,7 +239,7 @@ export interface ForDirectiveNode extends Loc {
 export interface SwitchDirectiveNode extends Loc {
   type: "SwitchDirective";
   /** Expresión del switch: "this.status", "this.mode", etc. */
-  discriminant: string;
+  discriminant: ExpressionNode;
   cases: SwitchCaseNode[];
   /** Cuerpo del `<default>`, o null si no hay default. */
   defaultCase: TemplateNode[] | null;
@@ -237,7 +253,7 @@ export interface SwitchDirectiveNode extends Loc {
 export interface SwitchCaseNode extends Loc {
   type: "SwitchCase";
   /** Valor del case: `"loading"`, `42`, etc. (raw expression). */
-  test: string;
+  test: ExpressionNode;
   consequent: TemplateNode[];
 }
 

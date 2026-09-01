@@ -10,11 +10,11 @@ import type {
   IfDirectiveNode,
   ForDirectiveNode,
   SwitchDirectiveNode,
+  SwitchCaseNode,
   AttributeNode,
   NormalAttributeNode,
   SpreadAttributeNode,
   StringValueNode,
-  ExpressionValueNode,
 } from "./nodes";
 
 export function generate(ast: ProgramNode): string {
@@ -52,10 +52,22 @@ function emitTemplateNode(node: TemplateNode): string {
 }
 
 function emitElement(node: ElementNode): string {
-  const typeCode = node.isComponent ? node.tag : JSON.stringify(node.tag);
-  const propsCode = emitProps(node.attributes);
-  const childrenCode = `[${emitChildren(node.children)}]`;
-  return `h(${typeCode}, ${propsCode}, ${childrenCode})`;
+  return emitElementParts(
+    node.isComponent ? node.tag : JSON.stringify(node.tag),
+    node.attributes,
+    emitChildren(node.children),
+  );
+}
+
+// Emite `h(type, props, [children])` a partir de sus partes, sin recurrir
+// a nodos AST. Puede usarse tanto desde un ElementNode como desde <for>.
+function emitElementParts(
+  typeCode: string,
+  attributes: AttributeNode[],
+  childrenCode: string,
+): string {
+  const propsCode = emitProps(attributes);
+  return `h(${typeCode}, ${propsCode}, [${childrenCode}])`;
 }
 
 function emitFragment(node: FragmentNode): string {
@@ -68,11 +80,11 @@ function emitText(node: TextNode): string {
 }
 
 function emitExpression(node: ExpressionNode): string {
-  return `text(String(${node.expression}))`;
+  return `text(String(${node.source}))`;
 }
 
 function emitIf(node: IfDirectiveNode, spread = true): string {
-  let expr = `(${node.condition}) ? [${emitChildren(node.consequent)}] : `;
+  let expr = `(${node.condition.source}) ? [${emitChildren(node.consequent)}] : `;
   if (node.alternate === null) {
     expr += "[]";
   } else if (Array.isArray(node.alternate)) {
@@ -88,36 +100,51 @@ function emitFor(node: ForDirectiveNode): string {
     n => !(n.type === "Text" && !n.value),
   );
 
-  let childElement: ElementNode;
+  let typeCode: string;
+  let attributes: AttributeNode[];
+  let childrenCode: string;
   if (meaningful.length === 1 && meaningful[0].type === "Element") {
-    childElement = meaningful[0];
+    typeCode = meaningful[0].isComponent
+      ? meaningful[0].tag
+      : JSON.stringify(meaningful[0].tag);
+    attributes = meaningful[0].attributes;
+    childrenCode = emitChildren(meaningful[0].children);
   } else {
-    childElement = {
-      type: "Element", tag: "div", isComponent: false,
-      attributes: [], children: node.children,
-      start: 0, end: 0,
-    };
+    typeCode = JSON.stringify("div");
+    attributes = [];
+    childrenCode = emitChildren(node.children);
   }
 
-  const keyAttr: NormalAttributeNode | null = node.key
-    ? { type: "Attribute", name: "key", value: { type: "ExpressionValue", expression: node.key, start: 0, end: 0 } as ExpressionValueNode, start: 0, end: 0 }
-    : null;
-
-  const attrs = keyAttr ? [keyAttr, ...childElement.attributes] : childElement.attributes;
-  const hCall = emitElement({ ...childElement, attributes: attrs });
-  const mapBody = `(${node.variable}) => ${hCall}`;
-  return `...${node.iterable}.map(${mapBody})`;
+  const propsCode = emitPropsWithKey(attributes, node.key);
+  const hCall = `h(${typeCode}, ${propsCode}, [${childrenCode}])`;
+  return `...${node.iterable.source}.map((${node.variable}) => ${hCall})`;
 }
 
 function emitSwitch(node: SwitchDirectiveNode): string {
   let body = "";
   for (const c of node.cases) {
-    body += `case ${c.test}: return [${emitChildren(c.consequent)}]; `;
+    body += `case ${c.test.source}: return [${emitChildren(c.consequent)}]; `;
   }
   body += node.defaultCase
     ? `default: return [${emitChildren(node.defaultCase)}];`
     : "default: return [];";
-  return `...(() => { switch (${node.discriminant}) { ${body} } })()`;
+  return `...(() => { switch (${node.discriminant.source}) { ${body} } })()`;
+}
+
+function emitPropsWithKey(
+  attributes: AttributeNode[],
+  key: ExpressionNode | null,
+): string {
+  const entries: string[] = [];
+  if (key) entries.push(`key: ${key.source}`);
+  for (const attr of attributes) {
+    if (attr.type === "SpreadAttribute") {
+      entries.push(`...${attr.spread.source}`);
+    } else {
+      entries.push(`${normalizePropName(attr.name)}: ${attr.value === null ? "true" : emitAttrValue(attr.value)}`);
+    }
+  }
+  return entries.length === 0 ? "null" : `{ ${entries.join(", ")} }`;
 }
 
 function emitProps(attrs: AttributeNode[]): string {
@@ -125,21 +152,18 @@ function emitProps(attrs: AttributeNode[]): string {
   const entries: string[] = [];
   for (const attr of attrs) {
     if (attr.type === "SpreadAttribute") {
-      entries.push(`...${attr.expression}`);
+      entries.push(`...${attr.spread.source}`);
     } else {
-      const name = normalizePropName(attr.name);
       const value = attr.value === null ? "true" : emitAttrValue(attr.value);
-      entries.push(`${name}: ${value}`);
+      entries.push(`${normalizePropName(attr.name)}: ${value}`);
     }
   }
   return `{ ${entries.join(", ")} }`;
 }
 
-function emitAttrValue(value: StringValueNode | ExpressionValueNode): string {
-  switch (value.type) {
-    case "StringValue": return JSON.stringify(value.value);
-    case "ExpressionValue": return value.expression;
-  }
+function emitAttrValue(value: StringValueNode | ExpressionNode): string {
+  if (value.type === "StringValue") return JSON.stringify(value.value);
+  return value.source;
 }
 
 function normalizePropName(name: string): string {

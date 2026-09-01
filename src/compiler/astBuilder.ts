@@ -7,6 +7,7 @@ import type {
   FragmentNode,
   TextNode,
   ExpressionNode,
+  ExpressionRole,
   IfDirectiveNode,
   ForDirectiveNode,
   SwitchDirectiveNode,
@@ -15,8 +16,6 @@ import type {
   NormalAttributeNode,
   SpreadAttributeNode,
   AttributeValueNode,
-  StringValueNode,
-  ExpressionValueNode,
 } from "./nodes";
 
 const KEYWORD_PRECEDE_EXPRESSION = new Set([
@@ -108,7 +107,7 @@ export class ASTBuilder {
     if (tag === "for") return this.parseForElement(start);
     if (tag === "switch") return this.parseSwitchElement(start);
     if (tag === "else-if" || tag === "else") {
-      throw new Error(`<${tag}> must follow <if> or <else-if> at position ${start}`);
+      throw new Error(`<${tag}> must follow <if> or <else-if>`);
     }
 
     const isComponent = /^[A-Z]/.test(tag) || tag.includes(".");
@@ -135,7 +134,12 @@ export class ASTBuilder {
       if (ch === "{") {
         const inner = this.readBraced();
         if (inner.startsWith("...")) {
-          attrs.push({ type: "SpreadAttribute", expression: inner.slice(3).trim(), start: this.i - inner.length - 2, end: this.i } as SpreadAttributeNode);
+          attrs.push({
+            type: "SpreadAttribute",
+            spread: this.makeExpr("spread", inner.slice(3).trim()),
+            start: this.i - inner.length - 2,
+            end: this.i,
+          } as SpreadAttributeNode);
         }
         continue;
       }
@@ -145,14 +149,14 @@ export class ASTBuilder {
       if (this.src[this.i] === "=") {
         this.i++;
         this.skipWs();
-        value = this.readAttrValue();
+        value = this.readAttrValue(name);
       }
       attrs.push({ type: "Attribute", name, value, start: this.i - name.length, end: this.i } as NormalAttributeNode);
     }
     return attrs;
   }
 
-  private readAttrValue(): AttributeValueNode {
+  private readAttrValue(name: string): AttributeValueNode {
     const start = this.i;
     const v = this.src[this.i];
     if (v === '"' || v === "'") {
@@ -161,7 +165,8 @@ export class ASTBuilder {
     }
     if (v === "{") {
       const val = this.readBraced();
-      return { type: "ExpressionValue", expression: val, start, end: this.i };
+      const role: ExpressionRole = /^on[A-Z]/.test(name) ? "eventHandler" : "attrValue";
+      return this.makeExpr(role, val, start, this.i);
     }
     const val = this.readBareAttrValue();
     return { type: "StringValue", value: val, start, end: this.i };
@@ -193,7 +198,7 @@ export class ASTBuilder {
 
       if (ch === "{") {
         const inner = this.readBraced();
-        items.push({ type: "Expression", expression: inner, start: this.i - inner.length - 2, end: this.i });
+        items.push(this.makeExpr("text", inner, this.i - inner.length - 2, this.i));
         continue;
       }
 
@@ -205,7 +210,7 @@ export class ASTBuilder {
   // ── Reserved directive tags ────────────────────────────────
 
   private parseIfElement(start: number): IfDirectiveNode {
-    const condition = this.readDirectiveAttr("condition", start);
+    const condition = this.readDirectiveAttr("condition", start, "condition");
     this.i++;
     const consequent = this.parseChildren();
     this.consumeClosingTag("if");
@@ -215,7 +220,7 @@ export class ASTBuilder {
   private parseElseIfElement(): IfDirectiveNode {
     const start = this.i;
     this.i += 8;
-    const condition = this.readDirectiveAttr("condition", start);
+    const condition = this.readDirectiveAttr("condition", start, "condition");
     this.i++;
     const consequent = this.parseChildren();
     this.consumeClosingTag("else-if");
@@ -251,28 +256,38 @@ export class ASTBuilder {
     const attributes = this.parseAttributes();
     const eachAttr = attributes.find(a => a.type === "Attribute" && a.name === "each") as NormalAttributeNode | undefined;
     if (!eachAttr || !eachAttr.value) {
-      throw new Error(`<for> requires an each attribute at position ${start}`);
+      throw new Error(`<for> requires an each attribute`);
     }
-    const eachValue = this.extractAttrValue(eachAttr.value);
+    if (eachAttr.value.type !== "Expression") {
+      throw new Error(`<for each> expects an expression {...}, e.g. each={item of items}`);
+    }
+    const eachValue = eachAttr.value.source;
     const match = eachValue.match(/^([A-Za-z_$][\w$]*)\s+of\s+(.+)$/);
     if (!match) {
-      throw new Error(`Invalid <for> each syntax: expected "item of items" at position ${start}`);
+      throw new Error(`Invalid <for> each syntax: expected "item of items"`);
     }
 
     const keyAttr = attributes.find(a => a.type === "Attribute" && a.name === "key") as NormalAttributeNode | undefined;
-    const key = keyAttr?.value ? this.extractAttrValue(keyAttr.value) : null;
+    const key = keyAttr?.value && keyAttr.value.type === "Expression"
+      ? { type: "Expression", role: "key", source: keyAttr.value.source, start: 0, end: 0 } as ExpressionNode
+      : null;
 
     this.i++;
     const children = this.parseChildren();
     this.consumeClosingTag("for");
     return {
-      type: "ForDirective", variable: match[1], iterable: match[2].trim(),
-      key, children, start, end: this.i,
+      type: "ForDirective",
+      variable: match[1],
+      iterable: { type: "Expression", role: "iterable", source: match[2].trim(), start: 0, end: 0 } as ExpressionNode,
+      key,
+      children,
+      start,
+      end: this.i,
     };
   }
 
   private parseSwitchElement(start: number): SwitchDirectiveNode {
-    const discriminant = this.readDirectiveAttr("value", start);
+    const discriminant = this.readDirectiveAttr("value", start, "discriminant");
     this.i++;
     const rawChildren = this.parseChildren();
     this.consumeClosingTag("switch");
@@ -284,42 +299,51 @@ export class ASTBuilder {
       if (child.type === "Element" && child.tag === "case") {
         const testAttr = child.attributes.find(a => a.type === "Attribute" && a.name === "test") as NormalAttributeNode | undefined;
         if (!testAttr || !testAttr.value) {
-          throw new Error(`<case> requires a test attribute at position ${child.start}`);
+          throw new Error(`<case> requires a test attribute`);
         }
         cases.push({
-          type: "SwitchCase", test: this.extractAttrValue(testAttr.value),
-          consequent: child.children, start: child.start, end: child.end,
+          type: "SwitchCase",
+          test: this.exprFromAttrValue(testAttr.value, "caseTest"),
+          consequent: child.children,
+          start: child.start,
+          end: child.end,
         });
       } else if (child.type === "Element" && child.tag === "default") {
         defaultCase = child.children;
       } else if (child.type === "Text" && !child.value) {
         // skip empty text
       } else {
-        throw new Error(`Only <case> and <default> allowed inside <switch> at position ${start}`);
+        throw new Error(`Only <case> and <default> allowed inside <switch>`);
       }
     }
 
     return { type: "SwitchDirective", discriminant, cases, defaultCase, start, end: this.i };
   }
 
-  private readDirectiveAttr(name: string, start: number): string {
+  private readDirectiveAttr(name: string, start: number, role: ExpressionRole): ExpressionNode {
     const attributes = this.parseAttributes();
     const attr = attributes.find(a => a.type === "Attribute" && a.name === name) as NormalAttributeNode | undefined;
     if (!attr || !attr.value) {
-      throw new Error(`<...> requires a ${name} attribute at position ${start}`);
+      throw new Error(`<...> requires a ${name} attribute`);
     }
-    return this.extractAttrValue(attr.value);
+    return this.exprFromAttrValue(attr.value, role);
   }
 
-  private extractAttrValue(value: StringValueNode | ExpressionValueNode): string {
-    if (value.type === "StringValue") return value.value;
-    return value.expression;
+  private exprFromAttrValue(value: AttributeValueNode, role: ExpressionRole): ExpressionNode {
+    if (value.type === "Expression") {
+      return { type: "Expression", role, source: value.source, start: 0, end: 0 } as ExpressionNode;
+    }
+    return { type: "Expression", role, source: value.value, start: 0, end: 0 } as ExpressionNode;
+  }
+
+  private makeExpr(role: ExpressionRole, source: string, start = 0, end = 0): ExpressionNode {
+    return { type: "Expression", role, source, start, end };
   }
 
   // ── Helpers ─────────────────────────────────────────────────
 
   private readGroup(open: string, close: string): string {
-    if (this.src[this.i] !== open) throw new Error(`Expected "${open}" at position ${this.i}`);
+    if (this.src[this.i] !== open) throw new Error(`Expected "${open}"`);
     let inString: string | null = null;
     let depth = 1;
     const start = this.i + 1;
@@ -405,7 +429,7 @@ export class ASTBuilder {
 
   private consumeClosingTag(tag: string): void {
     if (this.src[this.i] !== "<" || this.src[this.i + 1] !== "/") {
-      throw new Error(`Expected closing tag </${tag}> at position ${this.i}`);
+      throw new Error(`Expected closing tag </${tag}>`);
     }
     this.i += 2;
     if (tag) {
