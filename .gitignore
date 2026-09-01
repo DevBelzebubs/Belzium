@@ -3,3 +3,4 @@ tests/compiler/.cache
 tools/belzium-language/dist
 tools/belzium-language/types
 *.vsix
+debug.ts
