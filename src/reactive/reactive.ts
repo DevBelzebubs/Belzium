@@ -16,12 +16,18 @@ const baseHandlers: ProxyHandler<object> = {
   set(target, property, value, receiver) {
     const hadKey = Object.prototype.hasOwnProperty.call(target, property);
     const oldValue = Reflect.get(target, property, receiver);
+    const oldLength = Array.isArray(target) ? (target as unknown[]).length : -1;
     const result = Reflect.set(target, property, value, receiver);
     if (!hadKey) {
       trigger(target, property, "ADD", value);
     } else if (!Object.is(oldValue, value)) {
       //Trigger ejecuta en condicional para evitar renders inecesarios
       trigger(target, property, "SET", value); // Llama a la función trigger para notificar los efectos
+    }
+    // Al reducir arr.length las claves eliminadas cambian la iteración:
+    // se disparan también los efectos de ITERATE_KEY (Object.keys / for..in).
+    if (property === "length" && Number(value) < oldLength) {
+      trigger(target, ITERATE_KEY, "SET");
     }
     return result;
   },

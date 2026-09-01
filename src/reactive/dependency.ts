@@ -56,7 +56,6 @@ export function trigger(
   if (Array.isArray(target) && key === "length" && type === "SET") {
     // Si se está estableciendo la longitud de un array, se dispara los efectos de los índices
     const newLength = Number(newValue);
-    const iterateEffects = depsMap.get(ITERATE_KEY);
     depsMap.forEach((dep, depKey) => {
       if (isArrayIndex(depKey) && Number(depKey) >= newLength) {
         dep.forEach((effect) => {

@@ -154,4 +154,20 @@ it("Deberia de hacer trigger a los índices afectados por los cambios de length"
     expect(thirdRuns).toBe(2);
 });
 
+it("Deberia de reaccionar a la reduccion de length en iteraciones (Object.keys)", () => {
+    const state = reactive([1, 2, 3]);
+
+    let keys = 0;
+
+    effect(() => {
+        keys = Object.keys(state).length;
+    });
+
+    expect(keys).toBe(3);
+
+    state.length = 1;
+
+    expect(keys).toBe(1);
+});
+
 });
