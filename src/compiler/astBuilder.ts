@@ -333,7 +333,9 @@ export class ASTBuilder {
     if (value.type === "Expression") {
       return { type: "Expression", role, source: value.source, start: 0, end: 0 } as ExpressionNode;
     }
-    return { type: "Expression", role, source: value.value, start: 0, end: 0 } as ExpressionNode;
+    // Soporta literales: <switch value="a"> y <case test="b"> compilan a
+    // switch ("a") y case "b": con un StringValue se emite un literal.
+    return { type: "Expression", role, source: JSON.stringify(value.value), start: 0, end: 0 } as ExpressionNode;
   }
 
   private makeExpr(role: ExpressionRole, source: string, start = 0, end = 0): ExpressionNode {

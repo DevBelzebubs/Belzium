@@ -365,4 +365,22 @@ class App {
   }
 }`)).toThrow(/each attribute/);
   });
+
+  it("acepta literales string en <switch> y <case>", () => {
+    const code = compile(`@Component()
+class App {
+  render() {
+    return (
+      <switch value="loading">
+        <case test="loading"><p>Loading</p></case>
+        <case test="ok"><p>Ok</p></case>
+        <default><p>Other</p></default>
+      </switch>
+    );
+  }
+}`);
+    expect(code).toContain("switch (\"loading\")");
+    expect(code).toContain("case \"loading\":");
+    expect(code).toContain("case \"ok\":");
+  });
 });
