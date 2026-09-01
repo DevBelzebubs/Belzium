@@ -52,4 +52,19 @@ describe("scheduler", () => {
     await Promise.resolve();
     expect(order).toEqual(["first-a", "first-b", "second-a"]);
   });
+
+  it("does not run twice a job that is already pending in the current flush", async () => {
+    let runsA = 0;
+    let runsB = 0;
+    const jobB = () => { runsB++; };
+    const jobA = () => {
+      runsA++;
+      queueJob(jobB);
+    };
+    queueJob(jobA);
+    queueJob(jobB);
+    await Promise.resolve();
+    expect(runsA).toBe(1);
+    expect(runsB).toBe(1);
+  });
 });
