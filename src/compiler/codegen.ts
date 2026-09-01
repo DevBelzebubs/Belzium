@@ -141,7 +141,7 @@ function emitPropsWithKey(
     if (attr.type === "SpreadAttribute") {
       entries.push(`...${attr.spread.source}`);
     } else {
-      entries.push(`${normalizePropName(attr.name)}: ${attr.value === null ? "true" : emitAttrValue(attr.value)}`);
+      entries.push(`${propKeyCode(attr.name)}: ${attr.value === null ? "true" : emitAttrValue(attr.value)}`);
     }
   }
   return entries.length === 0 ? "null" : `{ ${entries.join(", ")} }`;
@@ -155,7 +155,7 @@ function emitProps(attrs: AttributeNode[]): string {
       entries.push(`...${attr.spread.source}`);
     } else {
       const value = attr.value === null ? "true" : emitAttrValue(attr.value);
-      entries.push(`${normalizePropName(attr.name)}: ${value}`);
+      entries.push(`${propKeyCode(attr.name)}: ${value}`);
     }
   }
   return `{ ${entries.join(", ")} }`;
@@ -164,6 +164,15 @@ function emitProps(attrs: AttributeNode[]): string {
 function emitAttrValue(value: StringValueNode | ExpressionNode): string {
   if (value.type === "StringValue") return JSON.stringify(value.value);
   return value.source;
+}
+
+// Devuelve la clave de prop ya lista para emitir: normaliza className/htmlFor
+// y, si el nombre no es un identificador JS válido (data-*, aria-*, kebab, ...),
+// lo emite como string para no generar JS inválido.
+function propKeyCode(name: string): string {
+  let key = normalizePropName(name);
+  if (!/^[A-Za-z_$][\w$]*$/.test(key)) key = JSON.stringify(key);
+  return key;
 }
 
 function normalizePropName(name: string): string {

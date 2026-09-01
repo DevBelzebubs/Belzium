@@ -383,4 +383,16 @@ class App {
     expect(code).toContain("case \"loading\":");
     expect(code).toContain("case \"ok\":");
   });
+
+  it("emite props con guion como claves string (data-*, aria-*)", () => {
+    const code = compile(`@Component()
+class App {
+  render() {
+    return <div data-id={this.id} aria-label="x" stroke-width={2}>Hi</div>;
+  }
+}`);
+    expect(code).toContain('"data-id": this.id');
+    expect(code).toContain('"aria-label": "x"');
+    expect(code).toContain('"stroke-width": 2');
+  });
 });
