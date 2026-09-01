@@ -137,4 +137,43 @@ describe("ref", () => {
 
     expect(outer.value.value).toBe(10);
   });
+
+  it("es profundamente reactivo con objetos", () => {
+    const user = ref({
+      name: "Juan",
+      nested: { count: 0 },
+    });
+
+    let name = "";
+
+    effect(() => {
+      name = user.value.name;
+    });
+
+    expect(name).toBe("Juan");
+
+    user.value.name = "Pedro";
+    expect(name).toBe("Pedro");
+
+    user.value.nested.count++;
+    expect(user.value.nested.count).toBe(1);
+  });
+
+  it("mantiene la reactividad al asignar un objeto nuevo", () => {
+    const user = ref({
+      name: "Juan",
+    });
+
+    let name = "";
+
+    effect(() => {
+      name = user.value.name;
+    });
+
+    user.value = {
+      name: "Pedro",
+    };
+
+    expect(name).toBe("Pedro");
+  });
 });

@@ -1,7 +1,7 @@
 import { track, trigger, ITERATE_KEY, MAP_KEY_ITERATE_KEY } from "./dependency";
-import { setReactiveFactory, toReactive, rawMap } from "./reactiveContext";
+import { RAW, setReactiveFactory, toReactive, rawMap } from "./reactiveContext";
+export { RAW };
 const reactiveMap = new WeakMap<object, any>(); // Cache de objetos crudos que ya fueron envueltos en un proxy reactivo (evita proxies duplicados)
-export const RAW = Symbol("raw");
 const baseHandlers: ProxyHandler<object> = {
   // Handlers para objetos y arrays (acceso a propiedades, índices y length)
   get(target, property, receiver) {

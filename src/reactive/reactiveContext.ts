@@ -1,6 +1,14 @@
-import { RAW } from "./reactive";
+// Módulo hoja (sin imports) que centraliza la conversión crudo <-> reactivo.
+// Al no importar a nadie, siempre se evalúa por completo antes que reactive.ts
+// o ref.ts, evitando ciclos y el error "setReactiveFactory is not a function"
+// durante la evaluación parcial de módulos.
 
-import { isRef } from "./ref";
+export const RAW = Symbol("raw"); // Key especial que expone el objeto crudo tras un proxy reactivo
+
+// Marcador estructural (string) para identificar un Ref sin importar ref.ts.
+// Los Ref lo definen como propiedad propia no enumerable (Object.defineProperty),
+// de modo que no aparece en los miembros de completado de la API pública.
+export const REF_MARKER = "__belzium__ref__";
 
 type ReactiveFactory = <T extends object>(target: T) => T;
 // Usamos el patrón factory para crear objetos reactivos
@@ -19,7 +27,10 @@ export function toReactive<T>(value: T): T {
 
   // Los refs ya son reactivos y gestionan su propio seguimiento
   // de dependencias; envolverlos en otro proxy rompe sus Sets internos.
-  if (isRef(value)) {
+  if (
+    REF_MARKER in value &&
+    (value as Record<string, unknown>)[REF_MARKER] === true
+  ) {
     return value;
   }
 

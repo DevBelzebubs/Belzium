@@ -4,6 +4,11 @@ import { trackEffect, triggerEffect } from "./dependency";
 
 import { ReactiveEffect } from "./effect";
 
+// Garantiza que reactiveFactory esté registrado antes de usar toReactive
+import "./reactive";
+
+import { REF_MARKER, toRaw, toReactive } from "./reactiveContext";
+
 // Marca interna utilizada para identificar un Ref
 export const IS_REF = Symbol("is_ref");
 
@@ -29,6 +34,9 @@ export class RefImpl<T> implements Ref<T> {
 
   constructor(value: T) {
     this._value = value;
+    // Marcador estructural no enumerable: permite que reactiveContext
+    // (módulo hoja, sin importar ref.ts) detecte este Ref y no lo envuelva.
+    Object.defineProperty(this, REF_MARKER, { value: true });
   }
 
   // Lectura del valor reactivo
@@ -37,19 +45,22 @@ export class RefImpl<T> implements Ref<T> {
     // como dependencia de este Ref
     trackEffect(this.deps);
 
-    return this._value;
+    // Los objetos se envuelven en proxies reactivos
+    // (deep reactivity) para que las lecturas anidadas
+    // queden trackeadas. Los refs se devuelven tal cual.
+    return toReactive(this._value);
   }
 
   // Escritura del valor reactivo
   set value(newValue: T) {
     // Si el valor no cambió,
     // no existe ninguna actualización
-    if (Object.is(this._value, newValue)) {
+    if (Object.is(this._value, toRaw(newValue))) {
       return;
     }
 
-    // Actualiza el valor interno
-    this._value = newValue;
+    // Actualiza el valor interno (se guarda el objeto crudo)
+    this._value = toRaw(newValue);
 
     // Notifica a los effects dependientes
     triggerEffect(this.deps);
