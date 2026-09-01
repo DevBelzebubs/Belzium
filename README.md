@@ -1,4 +1,4 @@
-# Belzium (Alpha)
+# Belzium (Beta)
 
 Framework frontend minimalista en TypeScript con compiler propio (`.bel`), reactividad, componentes, DI/IoC y extensión VSCode — cero dependencias de runtime.
 
@@ -43,14 +43,18 @@ Framework frontend minimalista en TypeScript con compiler propio (`.bel`), react
   - Sus métodos `onMounted`/`onUnmounted` se enlazan al ciclo de vida del componente.
 - **Directivas personalizadas:**
   - `@Directive()`: marca una clase como directiva reutilizable en templates.
-  - Uso en `.bel`: `@clickable (enabled) { ... }` compila a `h(Clickable, { enabled }, [...])`.
+  - Uso en `.bel`: `<Clickable enabled={...}>{...}</Clickable>` compila a `h(Clickable, { enabled: ... }, [...])`.
 - **Compiler `.bel` → TypeScript:**
   - JSX a llamadas `h()` / `text()`.
-  - `@if` / `@else` / `@else if` a expresiones ternarias.
-  - `@for (item of items; key)` a `.map()` con VNodes keyados.
-  - `@switch` / `@case` / `@default` a IIFE con `switch`.
-  - Directivas custom PascalCase a componentes.
+  - Directivas XML: `<if>` / `<else>` / `<else-if>` a expresiones ternarias.
+  - `<for each={item of items} key={key}>` a `.map()` con VNodes keyados.
+  - `<switch value>` / `<case test>` / `<default>` a IIFE con `switch`.
+  - Componentes custom PascalCase a componentes.
   - Auto-inyección de imports del runtime.
+  - Capa de expresiones tipadas con roles semánticos (`text`, `attrValue`, `eventHandler`, `spread`, `condition`, `iterable`, `key`, `discriminant`, `caseTest`).
+  - Errores estructurados (`CompileError`) con línea:columna y snippet.
+  - Atributos con guion (`data-*`, `aria-*`, SVG) emitidos correctamente.
+  - Literales string admitidos en `<switch value>` / `<case test>`.
 - **Extensión VSCode:**
   - Syntax highlighting para `.bel` (decoradores, directivas, keywords).
   - IntelliSense: completions, hover, go-to-definition.
@@ -70,7 +74,7 @@ Framework frontend minimalista en TypeScript con compiler propio (`.bel`), react
 
 ```bash
 npm install
-npm test          # ejecuta la suite (337 tests / 36 archivos)
+npm test          # ejecuta la suite (368 tests / 37 archivos)
 ```
 
 ### Ejemplos
@@ -78,26 +82,27 @@ npm test          # ejecuta la suite (337 tests / 36 archivos)
 #### Componente `.bel`
 
 ```bel
-@import { ref } from "belzium";
+import { ref } from "belzium";
 
 @Component()
 class Counter {
   count = ref(0);
   items = [1, 2, 3];
 
-  template() {
+  render() {
     return (
       <div>
         <h1>Conteo: {this.count.value}</h1>
-        @if (this.count.value >= 3) {
+        <if condition={this.count.value >= 3}>
           <p>Grande</p>
-        } @else {
+        </if>
+        <else>
           <p>Pequeño</p>
-        }
+        </else>
         <ul>
-          @for (n of this.items; n) {
+          <for each={n of this.items} key={n}>
             <li>Item {n}</li>
-          }
+          </for>
         </ul>
         <button onClick={() => this.count.value++}>+1</button>
       </div>
@@ -246,7 +251,7 @@ class Clickable {
 }
 ```
 
-Uso en template `.bel`: `@clickable (this.isEnabled) { <span>Click</span> }`
+Uso en template `.bel`: `<Clickable enabled={this.isEnabled}><span>Click</span></Clickable>`
 
 #### VNodes
 
@@ -270,10 +275,17 @@ El compiler transforma archivos `.bel` (TypeScript + JSX + directivas Belzium) e
 | `<div>` | `h("div", null, [...])` |
 | `<UserCard />` | `h(UserCard, null, [...])` |
 | `{expr}` | `text(String(expr))` |
-| `@if (c) { ... } @else { ... }` | `...((c) ? [...] : [...])` |
-| `@for (n of items; key) { ... }` | `...items.map((n) => h(..., { key }, [...]))` |
-| `@switch (e) { @case ("v") {...} }` | IIFE con `switch` |
-| `@clickable (p) { ... }` | `h(Clickable, { p }, [...])` |
+| `<if condition={c}>...</if> <else>...</else>` | `...((c) ? [...] : [...])` |
+| `<for each={n of items} key={k}>...</for>` | `...items.map((n) => h(..., { key: k }, [...]))` |
+| `<switch value={e}><case test={"v"}>...</case></switch>` | IIFE con `switch` |
+| `<Clickable enabled={p}>...</Clickable>` | `h(Clickable, { enabled: p }, [...])` |
+
+El compiler modela cada fragmento JS de `{}` con un **rol semántico tipado**
+(`text`, `attrValue`, `eventHandler`, `spread`, `condition`, `iterable`, `key`,
+`discriminant`, `caseTest`), lo que permite emisión correcta y tooling.
+Acepta literales string en `<switch value="a">` / `<case test="b">` y emite
+atributos con guion (`data-*`, `aria-*`, SVG) como claves válidas. Los errores
+de compilación son `CompileError` con **línea:columna y snippet**.
 
 Uso:
 
@@ -298,7 +310,7 @@ npm run build
 
 **Features:**
 - Syntax highlighting con TextMate grammar.
-- Completions de directivas (`@if`, `@for`, `@switch`, ...) e IntelliSense completo.
+- Completions de directivas (`<if>`, `<for>`, `<switch>`, ...) e IntelliSense completo.
 - Hover con tipo inferido.
 - Go-to-definition entre archivos `.bel`.
 - Diagnostics (syntactic + semantic) con debounce.
@@ -312,13 +324,18 @@ src/
   component/       Componentes (decoradores, lifecycle, slots, I/O, hooks, directives)
   di/              DI/IoC (ApplicationContext, @Service, scopes, tokens)
   runtime/         Runtime (createApp, VNodes, renderers)
-  compiler.ts      Compiler .bel → TypeScript
+  compiler.ts      Compiler .bel → TypeScript (entrada pública)
+  compiler/
+    astBuilder.ts  Parser .bel → AST
+    codegen.ts     Lowering AST → h()/text()
+    nodes.ts       Tipos de nodos del AST (con roles de expresión)
+    errors.ts      CompileError (línea:columna + snippet)
   tsxTransform.ts  Transform .bel → TSX para soporte IDE
   store.ts         @Store (estado global reactivo)
   index.ts         API pública
 tools/
   belzium-language/  Extensión VSCode para .bel
-tests/               337 tests (36 archivos)
+tests/               368 tests (37 archivos)
 docs/                Language spec + compiler architecture
 ```
 
@@ -338,7 +355,7 @@ npm run typecheck:language # verificar tipos de la extensión
 npx vitest run
 ```
 
-337 tests cubriendo: reactividad, componentes, DI/IoC, stores, hooks, directivas, compiler, language service.
+368 tests cubriendo: reactividad, componentes, DI/IoC, stores, hooks, directivas, compiler, language service.
 
 ---
 
