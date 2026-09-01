@@ -1,5 +1,5 @@
 import { ReactiveEffect } from "./effect";
-import { queueJob } from "./scheduler";
+import { queueJob, unqueueJob } from "./scheduler";
 import { getActiveEffectScope } from "./effectScope";
 export type WatchSource<T> = () => T;
 export interface WatchOptions {
@@ -28,6 +28,10 @@ export function watch<T>(
   const scheduler = options.flush === "pre" ? () => queueJob(job) : job;
   const effect = new ReactiveEffect(source, scheduler); // Crea un efecto reactivo para la función de watch
   const reactiveEffect = new ReactiveEffect(job);
+
+  // Al detener el watch también se cancela el job
+  // pendiente en la cola del scheduler.
+  effect.onStop = () => unqueueJob(job);
 
   getActiveEffectScope()?.add(reactiveEffect);
   oldValue = effect.run(); // Ejecuta el efecto para obtener el valor inicial y trackear las dependencias

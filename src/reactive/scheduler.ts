@@ -19,6 +19,15 @@ export function queueJob(
         queueMicrotask(flushJobs);
     }
 }
+
+// Retira un job de la cola antes de que se ejecute.
+// Permite cancelar un job pendiente (ej: al detener un watch).
+export function unqueueJob(
+    job: Job
+): void {
+    currentQueue.delete(job);
+    nextQueue.delete(job);
+}
 function flushJobs(): void {
     try {
         while (nextQueue.size > 0) {

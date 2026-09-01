@@ -178,4 +178,31 @@ it("Deberia deduplicar jobs en cola", async () => {
     await Promise.resolve();
     expect(calls).toBe(1);
 });
+it("Deberia cancelar el job pendiente al detenerse antes del flush", async () => {
+    const state = reactive({
+        count: 0
+    });
+
+    let calls = 0;
+
+    const watcher = watch(
+        () => state.count,
+        () => {
+            calls++;
+        },
+        {
+            flush: "pre"
+        }
+    );
+
+    state.count++;
+
+    // El job está en cola (microtask) pero aún no se ejecutó:
+    expect(calls).toBe(0);
+
+    watcher.stop();
+    await Promise.resolve();
+
+    expect(calls).toBe(0);
+});
 });
