@@ -1203,6 +1203,42 @@ it("should handle removing unkeyed child from keyed list", () => {
   expect(container.textContent).toBe("A");
 });
 
+it("should unmount leftover unkeyed components after a keyed diff", () => {
+  const context = new ApplicationContext();
+  const container = document.createElement("div");
+
+  let unmounted = 0;
+
+  class Item {
+    onUnmounted() {
+      unmounted++;
+    }
+
+    render() {
+      return h("span", null, [text("item")]);
+    }
+  }
+
+  context.register(Item, Item);
+
+  const oldVNode = h("div", null, [
+    h("span", { key: "a" }, [text("A")]),
+    h(Item, null, []),
+  ]);
+
+  patch(null, oldVNode, container, 0, context);
+  expect(container.textContent).toBe("Aitem");
+
+  const newVNode = h("div", null, [
+    h("span", { key: "a" }, [text("A")]),
+  ]);
+
+  patch(oldVNode, newVNode, container, 0, context);
+
+  expect(unmounted).toBe(1);
+  expect(container.textContent).toBe("A");
+});
+
 it("should remove trailing unkeyed children when the list shrinks", () => {
   const container = document.createElement("div");
 

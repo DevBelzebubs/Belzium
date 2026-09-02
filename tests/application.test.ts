@@ -811,6 +811,60 @@ it("detiene el efecto reactivo al desmontar", () => {
     expect(element?.innerHTML)
         .toBe("");
 });
+it("desmonta los componentes hijos al desmontar la app", () => {
+
+    document.body.innerHTML =
+        `<div id="app"></div>`;
+
+    let unmounted = 0;
+
+    @Component()
+    class Child {
+
+        onUnmounted() {
+            unmounted++;
+        }
+
+        render() {
+            return h(
+                "span",
+                null,
+                [
+                    text("child"),
+                ],
+            );
+        }
+    }
+
+    @Component()
+    class App {
+
+        render() {
+            return h(
+                "div",
+                null,
+                [
+                    h(Child),
+                ],
+            );
+        }
+    }
+
+    const app =
+        createApp(App);
+
+    app.context.register(Child, new Child());
+
+    app.mount("#app");
+
+    expect(unmounted)
+        .toBe(0);
+
+    app.unmount();
+
+    expect(unmounted)
+        .toBe(1);
+});
 it("detiene la reactividad del componente al desmontar", () => {
 
     document.body.innerHTML =

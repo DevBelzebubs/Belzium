@@ -66,7 +66,7 @@ function unmountComponent(vnode: VNode): void {
   // Desmonta recursivamente los componentes
   // anidados en el subárbol del componente.
   if (component.subTree) {
-    unmountNestedComponents(component.subTree);
+    unmountTree(component.subTree);
   }
 
   // El hook se ejecuta ANTES de eliminar el nodo
@@ -80,7 +80,7 @@ function unmountComponent(vnode: VNode): void {
 
 // Desmonta los componentes anidados dentro
 // de un árbol virtual de forma recursiva
-function unmountNestedComponents(vnode: VNode): void {
+export function unmountTree(vnode: VNode): void {
   if (isComponentVNode(vnode)) {
     unmountComponent(vnode);
 
@@ -88,7 +88,7 @@ function unmountNestedComponents(vnode: VNode): void {
   }
 
   for (const child of vnode.children) {
-    unmountNestedComponents(child);
+    unmountTree(child);
   }
 }
 // Convierte un VNode en un nodo real del DOM
@@ -507,6 +507,9 @@ function patchKeyedChildren(
 
   // Elimina hijos unkeyed que sobraron sin match
   for (const entry of oldUnkeyedNodes) {
+    // Desmonta los componentes que desaparecen
+    unmountTree(entry.vnode);
+
     if (entry.domNode.parentNode) {
       entry.domNode.parentNode.removeChild(entry.domNode);
     }

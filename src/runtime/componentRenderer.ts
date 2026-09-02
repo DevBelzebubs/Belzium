@@ -12,7 +12,7 @@ import type { VNode } from "./vnode";
 import { ComponentScope } from "../component/componentScope";
 import type { ComponentInstance } from "./componentInstance";
 
-import { patch } from "./vnodeRenderer";
+import { patch, unmountTree } from "./vnodeRenderer";
 
 import { effect } from "../reactive/effect";
 
@@ -91,6 +91,13 @@ export class ComponentRenderer {
     // Desmonta el componente mediante
     // su ComponentScope.
     const dispose = () => {
+      // Desmonta los componentes hijos del subárbol
+      // (sus scopes/hooks) antes de detener el propio.
+      if (currentVNode) {
+        unmountTree(currentVNode);
+        currentVNode = null;
+      }
+
       scope.unmount();
     };
 

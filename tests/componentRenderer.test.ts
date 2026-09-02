@@ -90,6 +90,52 @@ describe("ComponentRenderer", () => {
     expect(element.innerHTML).toBe("0");
   });
 
+  it("desmonta los componentes hijos al hacer dispose", () => {
+    @Component({
+      selector: "parent",
+    })
+    class Parent {
+      render() {
+        return h("div", null, [h(Child)]);
+      }
+    }
+
+    @Component({
+      selector: "child",
+    })
+    class Child {
+      onUnmounted() {
+        unmountedChildren++;
+      }
+
+      render() {
+        return h("span", null, [text("child")]);
+      }
+    }
+
+    let unmountedChildren = 0;
+
+    const parent = new Parent();
+
+    const element = document.createElement("div");
+
+    const context = new ApplicationContext();
+
+    context.register(Parent, new Parent());
+    context.register(Child, new Child());
+
+    const renderer = new ComponentRenderer(context);
+
+    const mounted = renderer.mount(Parent, parent, element);
+
+    expect(element.textContent).toBe("child");
+    expect(unmountedChildren).toBe(0);
+
+    mounted.dispose();
+
+    expect(unmountedChildren).toBe(1);
+  });
+
   it("Deberia actualizar el DOM con Pulses y VNodes", () => {
     @Component({
       selector: "counter",
