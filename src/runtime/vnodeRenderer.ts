@@ -699,8 +699,15 @@ export function mountComponent(
       // durante el render (ej: watch) pertenezcan
       // al scope y se detengan con el unmount.
       scope.run(() => {
-        // Genera el nuevo árbol virtual
-        const nextVNode = instance.render();
+        // El componente en construcción durante el render
+        // es el scope actual: los hooks (onMounted/onUnmounted)
+        // declarados dentro del render pertenecen a él.
+        const previousScope = getCurrentComponentScope();
+        setCurrentComponentScope(scope);
+
+        try {
+          // Genera el nuevo árbol virtual
+          const nextVNode = instance.render();
 
         // Primer render del componente
         if (!componentState.subTree) {
@@ -759,6 +766,9 @@ export function mountComponent(
         // componentes anidados más recientes.
         if (vnode.component) {
           vnode.component.subTree = nextVNode;
+        }
+        } finally {
+          setCurrentComponentScope(previousScope);
         }
       });
     });

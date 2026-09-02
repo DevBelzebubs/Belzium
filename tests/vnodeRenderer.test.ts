@@ -511,6 +511,37 @@ describe("Component lifecycle", () => {
     expect(calls).toEqual(["render", "mounted"]);
   });
 
+  it("registra los hooks onMounted/onUnmounted declarados dentro del scope del render", () => {
+    const calls: string[] = [];
+
+    @Component({ selector: "lifecycle-component" })
+    class LifecycleComponent {
+      render() {
+        onMounted(() => calls.push("mounted"));
+        onUnmounted(() => calls.push("unmounted"));
+
+        return h("div", null, [text("hello")]);
+      }
+    }
+
+    const context = new ApplicationContext();
+    context.register(LifecycleComponent, new LifecycleComponent());
+
+    const container = document.createElement("div");
+
+    const vnode = h(LifecycleComponent);
+
+    patch(null, vnode, container, 0, context);
+
+    // El hook registrado dentro del render
+    // pertenece al scope del componente:
+    expect(calls).toEqual(["mounted"]);
+
+    patch(vnode, null, container, 0, context);
+
+    expect(calls).toEqual(["mounted", "unmounted"]);
+  });
+
   it("no ejecuta onMounted nuevamente cuando el componente se actualiza", () => {
     const calls: string[] = [];
 
