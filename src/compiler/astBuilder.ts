@@ -34,7 +34,7 @@ export class ASTBuilder {
   constructor(private src: string) {}
 
   private error(message: string, offset: number): never {
-    throw new CompileError(message, this.src, offset);
+    throw new CompileError(message, this.src, offset, "template");
   }
 
   build(): ProgramNode {

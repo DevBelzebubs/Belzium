@@ -46,14 +46,20 @@ export function formatSnippet(source: string, offset: number): string {
   return `${lineText}\n${caretPad}^`;
 }
 
+// Origen del fallo: el template XML (.bel), una expresión TypeScript
+// interpolada, o un error interno del propio compilador.
+export type CompileErrorKind = "template" | "expression" | "internal";
+
 export class CompileError extends Error {
   readonly source: string;
   readonly offset: number;
   readonly line: number;
   readonly column: number;
   readonly snippet: string;
+  readonly errorKind: CompileErrorKind;
 
-  constructor(message: string, source: string, offset: number) {
+  constructor(message: string, source: string, offset: number,
+    errorKind: CompileErrorKind = "internal") {
     const pos = offsetToLineColumn(source, offset);
     const snippet = formatSnippet(source, offset);
     super(`${message}\n  at line ${pos.line}, column ${pos.column}\n${snippet}`);
@@ -63,5 +69,6 @@ export class CompileError extends Error {
     this.line = pos.line;
     this.column = pos.column;
     this.snippet = snippet;
+    this.errorKind = errorKind;
   }
 }
