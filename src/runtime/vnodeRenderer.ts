@@ -766,6 +766,9 @@ export function mountComponent(
         // componentes anidados más recientes.
         if (vnode.component) {
           vnode.component.subTree = nextVNode;
+          // También sincroniza el nodo real: el root
+          // pudo haber sido reemplazado durante el patch.
+          vnode.component.element = componentState.element;
         }
         } finally {
           setCurrentComponentScope(previousScope);

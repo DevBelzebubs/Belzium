@@ -580,6 +580,41 @@ describe("Component lifecycle", () => {
     expect(calls.filter((call) => call === "mounted")).toHaveLength(1);
   });
 
+  it("mantiene sincronizado component.element con el nodo real tras cambiar la raíz", () => {
+    const flag = ref(true);
+
+    @Component({ selector: "swap-root" })
+    class SwapRoot {
+      render() {
+        return flag.value
+          ? h("span", null, [text("A")])
+          : h("div", null, [text("B")]);
+      }
+    }
+
+    const context = new ApplicationContext();
+    context.register(SwapRoot, new SwapRoot());
+
+    const container = document.createElement("div");
+
+    const vnode = h(SwapRoot);
+
+    patch(null, vnode, container, 0, context);
+
+    // Al montar, el estado del VNode apunta al nodo real
+    expect(vnode.component?.element).toBe(container.firstChild);
+
+    // La raíz cambia de tipo (span -> div):
+    // el nodo real es reemplazado en el DOM
+    flag.value = false;
+
+    expect(container.firstChild?.nodeName).toBe("DIV");
+
+    // El estado del VNode debe seguir al nodo real vigente,
+    // no al nodo viejo que ya fue eliminado del DOM
+    expect(vnode.component?.element).toBe(container.firstChild);
+  });
+
   it("no ejecuta onUnmounted mientras el componente continúa montado", () => {
     let unmounted = 0;
 
