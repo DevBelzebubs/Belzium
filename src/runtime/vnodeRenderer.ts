@@ -306,6 +306,40 @@ function setProp(
     return;
   }
 
+  // Objeto de estilos: se aplican como estilos inline.
+  // Se aceptan tanto camelCase como kebab-case.
+  if (key === "style" && typeof value === "object" && value !== null) {
+    const style = (element as HTMLElement).style;
+
+    for (const [prop, rawValue] of Object.entries(value)) {
+      const cssName = prop.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
+      style.setProperty(cssName, rawValue == null ? "" : String(rawValue));
+    }
+
+    return;
+  }
+
+  // Clase en objeto (solo keys verdaderas) o en array
+  // (solo entradas truthy).
+  if ((key === "class" || key === "className") && typeof value === "object" && value !== null) {
+    const names = Array.isArray(value)
+      ? value.filter(Boolean)
+      : Object.entries(value)
+          .filter(([, enabled]) => enabled)
+          .map(([name]) => name);
+
+    element.setAttribute("class", names.join(" "));
+
+    return;
+  }
+
+  // Atributos booleanos: presente = vacío
+  if (value === true) {
+    element.setAttribute(key, "");
+
+    return;
+  }
+
   // Los valores falsy o null
   // eliminan el atributo
   if (value === false || value == null) {

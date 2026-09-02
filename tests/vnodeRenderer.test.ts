@@ -207,6 +207,60 @@ it("detiene la reactividad de un componente al desmontarlo mediante patch", () =
 
   expect(container.textContent).toBe("");
 });
+describe("Element props", () => {
+  it("aplica un objeto de estilo como estilos inline", () => {
+    const container = document.createElement("div");
+
+    patch(null, h("div", { style: { color: "red", backgroundColor: "blue" } }), container);
+
+    const element = container.firstElementChild!;
+
+    expect((element as HTMLElement).style.color).toBe("red");
+    expect((element as HTMLElement).style.backgroundColor).toBe("blue");
+    expect(element.getAttribute("style")).toContain("background-color: blue");
+  });
+
+  it("aplica una clase en objeto incluyendo solo las keys verdaderas", () => {
+    const container = document.createElement("div");
+
+    patch(
+      null,
+      h("div", { class: { btn: true, primary: false, "is-active": true } }),
+      container,
+    );
+
+    const element = container.firstElementChild!;
+
+    expect(element.className).toContain("btn");
+    expect(element.className).toContain("is-active");
+    expect(element.className).not.toContain("primary");
+  });
+
+  it("aplica una clase en array incluyendo solo las entradas truthy", () => {
+    const container = document.createElement("div");
+
+    patch(
+      null,
+      h("div", { class: ["a", "", null, "b", false] }),
+      container,
+    );
+
+    expect(container.firstElementChild!.className).toBe("a b");
+  });
+
+  it("aplica una prop booleana verdadera sin valor de string", () => {
+    const container = document.createElement("div");
+
+    patch(null, h("button", { disabled: true }), container);
+
+    const element = container.firstElementChild!;
+
+    expect(element.hasAttribute("disabled")).toBe(true);
+    expect((element as HTMLButtonElement).disabled).toBe(true);
+    // Valor canónico de atributo booleano: vacío
+    expect(element.getAttribute("disabled")).toBe("");
+  });
+});
 // -----------------------------------------------------------------------------
 // Ciclo de vida
 // -----------------------------------------------------------------------------
