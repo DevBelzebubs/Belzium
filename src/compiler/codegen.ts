@@ -1,57 +1,67 @@
 import type {
-  ProgramNode,
-  TopLevelNode,
   PassthroughNode,
-  TemplateNode,
-  ElementNode,
-  FragmentNode,
+  GeneratedNode,
+  LoweredElement,
+  LoweredFragment,
+  SelfClosingElementNode,
   TextNode,
   ExpressionNode,
-  IfDirectiveNode,
-  ForDirectiveNode,
-  SwitchDirectiveNode,
-  SwitchCaseNode,
   AttributeNode,
   NormalAttributeNode,
   SpreadAttributeNode,
   StringValueNode,
+  LoweredConditional,
+  LoweredList,
+  LoweredSwitchExpression,
 } from "./nodes";
 
-export function generate(ast: ProgramNode): string {
+export function generate(nodes: Array<PassthroughNode | GeneratedNode>): string {
   let out = "";
-  for (const node of ast.body) {
+  for (const node of nodes) {
     out += emitTopLevel(node);
   }
   return out;
 }
 
-function emitTopLevel(node: TopLevelNode): string {
+/** Re-emite un único nodo (template lowered o passthrough) a código string. */
+export function emitNodeCode(node: PassthroughNode | GeneratedNode): string {
+  return emitTopLevel(node);
+}
+
+function emitTopLevel(node: PassthroughNode | GeneratedNode): string {
   switch (node.type) {
     case "Passthrough":
       return node.code;
+    case "LoweredConditional":
+      return emitConditional(node);
+    case "LoweredList":
+      return emitList(node);
+    case "LoweredSwitchExpression":
+      return emitSwitch(node);
     default:
-      return emitTemplateNode(node as TemplateNode);
+      return emitTemplateNode(node as GeneratedNode);
   }
 }
 
-function emitChildren(nodes: TemplateNode[]): string {
+function emitChildren(nodes: GeneratedNode[]): string {
   return nodes.map(n => emitTemplateNode(n)).filter(s => s !== "").join(", ");
 }
 
-function emitTemplateNode(node: TemplateNode): string {
+function emitTemplateNode(node: GeneratedNode): string {
   switch (node.type) {
-    case "Element": return emitElement(node);
-    case "Fragment": return emitFragment(node);
-    case "Text": return emitText(node);
-    case "Expression": return emitExpression(node);
-    case "IfDirective": return emitIf(node);
-    case "ForDirective": return emitFor(node);
-    case "SwitchDirective": return emitSwitch(node);
+    case "Element": return emitElement(node as LoweredElement);
+    case "Fragment": return emitFragment(node as LoweredFragment);
+    case "SelfClosingElement": return emitSelfClosing(node as SelfClosingElementNode);
+    case "Text": return emitText(node as TextNode);
+    case "Expression": return emitExpression(node as ExpressionNode);
+    case "LoweredConditional": return emitConditional(node as LoweredConditional);
+    case "LoweredList": return emitList(node as LoweredList);
+    case "LoweredSwitchExpression": return emitSwitch(node as LoweredSwitchExpression);
     default: throw new Error(`Unknown node type: ${(node as { type: string }).type}`);
   }
 }
 
-function emitElement(node: ElementNode): string {
+function emitElement(node: LoweredElement): string {
   return emitElementParts(
     node.isComponent ? node.tag : JSON.stringify(node.tag),
     node.attributes,
@@ -59,8 +69,11 @@ function emitElement(node: ElementNode): string {
   );
 }
 
-// Emite `h(type, props, [children])` a partir de sus partes, sin recurrir
-// a nodos AST. Puede usarse tanto desde un ElementNode como desde <for>.
+function emitSelfClosing(node: SelfClosingElementNode): string {
+  return `h(${node.isComponent ? node.tag : JSON.stringify(node.tag)}, ${emitProps(node.attributes)}, [])`;
+}
+
+// Emite `h(type, props, [children])` a partir de sus partes.
 function emitElementParts(
   typeCode: string,
   attributes: AttributeNode[],
@@ -70,7 +83,7 @@ function emitElementParts(
   return `h(${typeCode}, ${propsCode}, [${childrenCode}])`;
 }
 
-function emitFragment(node: FragmentNode): string {
+function emitFragment(node: LoweredFragment): string {
   return `h("div", null, [${emitChildren(node.children)}])`;
 }
 
@@ -83,32 +96,31 @@ function emitExpression(node: ExpressionNode): string {
   return `text(String(${node.source}))`;
 }
 
-function emitIf(node: IfDirectiveNode, spread = true): string {
-  let expr = `(${node.condition.source}) ? [${emitChildren(node.consequent)}] : `;
+function emitConditional(node: LoweredConditional): string {
+  let expr = `(${node.test.source}) ? [${emitChildren(node.consequent)}] : `;
   if (node.alternate === null) {
     expr += "[]";
   } else if (Array.isArray(node.alternate)) {
     expr += `[${emitChildren(node.alternate)}]`;
   } else {
-    expr += emitIf(node.alternate, false);
+    expr += emitConditional(node.alternate);
   }
-  return spread ? `...(${expr})` : `(${expr})`;
+  return node.spread ? `...(${expr})` : `(${expr})`;
 }
 
-function emitFor(node: ForDirectiveNode): string {
+function emitList(node: LoweredList): string {
   const meaningful = node.children.filter(
-    n => !(n.type === "Text" && !n.value),
+    n => !(n.type === "Text" && !(n as TextNode).value),
   );
 
   let typeCode: string;
   let attributes: AttributeNode[];
   let childrenCode: string;
   if (meaningful.length === 1 && meaningful[0].type === "Element") {
-    typeCode = meaningful[0].isComponent
-      ? meaningful[0].tag
-      : JSON.stringify(meaningful[0].tag);
-    attributes = meaningful[0].attributes;
-    childrenCode = emitChildren(meaningful[0].children);
+    const el = meaningful[0] as LoweredElement;
+    typeCode = el.isComponent ? el.tag : JSON.stringify(el.tag);
+    attributes = el.attributes;
+    childrenCode = emitChildren(el.children);
   } else {
     typeCode = JSON.stringify("div");
     attributes = [];
@@ -120,7 +132,7 @@ function emitFor(node: ForDirectiveNode): string {
   return `...${node.iterable.source}.map((${node.variable}) => ${hCall})`;
 }
 
-function emitSwitch(node: SwitchDirectiveNode): string {
+function emitSwitch(node: LoweredSwitchExpression): string {
   let body = "";
   for (const c of node.cases) {
     body += `case ${c.test.source}: return [${emitChildren(c.consequent)}]; `;

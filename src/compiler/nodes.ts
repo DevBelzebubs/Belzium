@@ -257,4 +257,105 @@ export interface SwitchCaseNode extends Loc {
   consequent: TemplateNode[];
 }
 
+// ============================================================
+// NODOS LOWERED (resultado del template lowering)
+// ============================================================
+
+/**
+ * Un hijo ya lowered: puede ser un TemplateNode ordinario (que ya no
+ * contiene directivas) o un LoweredNode (una directiva resuelta).
+ *
+ * El lowering transpila cada `<if>/<for>/<switch>` (y sus cuerpos) a esta
+ * forma, dejando codegen como emisor puro sin conocimiento de directivas.
+ */
+export type GeneratedNode =
+  | LoweredElement
+  | LoweredFragment
+  | SelfClosingElementNode
+  | TextNode
+  | ExpressionNode
+  | LoweredNode;
+
+/**
+ * Un elemento JSX tras el lowering: igual a ElementNode pero sus hijos son
+ * GeneratedNodes (ya bajados recursivamente).
+ */
+export interface LoweredElement extends Loc {
+  type: "Element";
+  tag: string;
+  isComponent: boolean;
+  attributes: AttributeNode[];
+  children: GeneratedNode[];
+}
+
+/**
+ * Un fragmento JSX tras el lowering: igual a FragmentNode pero sus hijos son
+ * GeneratedNodes (ya bajados recursivamente).
+ */
+export interface LoweredFragment extends Loc {
+  type: "Fragment";
+  children: GeneratedNode[];
+}
+
+/**
+ * Resultado del lowering de una directiva de plantilla. El lowering
+ * convierte la forma declarativa en construcciones JS con slots
+ * semánticos ya resueltos (test, iterable, etc.).
+ */
+export type LoweredNode =
+  | LoweredConditional
+  | LoweredList
+  | LoweredSwitchExpression;
+
+/**
+ * `<if> / <else-if> / <else>` lowered a una expresión ternaria esparcida:
+ *   `...((test) ? [consequent] : [alternate])`
+ */
+export interface LoweredConditional extends Loc {
+  type: "LoweredConditional";
+  /** Expresión del test: "this.ok", "a > 0", ... */
+  test: ExpressionNode;
+  consequent: GeneratedNode[];
+  /**
+   * - null: no hay rama alternativa (se emite `[]`)
+   * - GeneratedNode[]: `<else>` simple
+   * - LoweredConditional: `<else-if>` encadenado
+   */
+  alternate: GeneratedNode[] | LoweredConditional | null;
+  /**
+   * true si es la directiva raíz (se emite con spread inicial),
+   * false para `<else-if>` encadenado.
+   */
+  spread: boolean;
+}
+
+/**
+ * `<for each={var of iterable} key={...}>` lowered a `.map()`:
+ *   `...iterable.map((variable) => <body>)`
+ */
+export interface LoweredList extends Loc {
+  type: "LoweredList";
+  /** Variable de iteración: "n", "item", ... */
+  variable: string;
+  /** Expresión del iterable: "this.items", ... */
+  iterable: ExpressionNode;
+  /** Key de iteración (atributo key), o null si no hay key. */
+  key: ExpressionNode | null;
+  /** Hijos del cuerpo del bucle (ya lowered). */
+  children: GeneratedNode[];
+}
+
+/**
+ * `<switch> / <case> / <default>` lowered a una IIFE con switch:
+ *   `...(() => { switch (discriminant) { case ...: return [...]; default: return [...]; } })()`
+ */
+export interface LoweredSwitchExpression extends Loc {
+  type: "LoweredSwitchExpression";
+  /** Expresión del switch: "this.status", ... */
+  discriminant: ExpressionNode;
+  cases: Array<{ test: ExpressionNode; consequent: GeneratedNode[] }>;
+  /** Cuerpo del `<default>`, o null si no hay default. */
+  defaultCase: GeneratedNode[] | null;
+}
+
 

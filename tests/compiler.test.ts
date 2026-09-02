@@ -578,4 +578,39 @@ class App {
       expect(e.errorKind).toBe("template");
     }
   });
+
+  it("genera source map únicamente con option sourceMap", () => {
+    const source = `@Component()
+class App {
+  render() {
+    return <div><p>{this.count}</p></div>;
+  }
+}`;
+    const plain = compile(source) as string;
+    const mapped = compileWithMap(source);
+    expect(mapped.code).toBe(plain);
+    expect(mapped.map).toContain("version");
+    expect(mapped.map).toContain("source.bel");
+  });
+
+  it("el source map incluye mappings hires para la salida h()/text()", () => {
+    const source = `@Component()
+class App {
+  render() {
+    return <button onClick={() => this.count++}>{this.count.value}</button>;
+  }
+}`;
+    const mapped = compileWithMap(source);
+    expect(mapped.code).toContain("h(");
+    expect(mapped.code).toContain("text(");
+    expect(mapped.map).toContain("mappings");
+    const seg = JSON.parse(mapped.map) as { sources: string[]; sourcesContent: string[] };
+    expect(seg.sources).toContain("source.bel");
+    expect(seg.sourcesContent?.[0]).toBe(source);
+  });
 });
+
+type CompileMapResult = { code: string; map: string };
+function compileWithMap(source: string) {
+  return compile(source, { sourceMap: true }) as CompileMapResult;
+}

@@ -1,9 +1,14 @@
 import { toKebabCase } from "./component/metadata";
 import { ASTBuilder } from "./compiler/astBuilder";
 import { generate } from "./compiler/codegen";
+import { lowerTemplate } from "./compiler/templateLowering";
+import { buildOutputMagicString } from "./compiler/sourceMap";
+import type { LoweredTopLevelNode } from "./compiler/templateLowering";
 
 export interface CompileOptions {
   importPath?: string;
+  /** Devuelve `{ code, map }` con un source map (magic-string) de h()/text(). */
+  sourceMap?: boolean;
 }
 
 export const RUNTIME_APIS = [
@@ -15,14 +20,23 @@ export const RUNTIME_APIS = [
   "toReactive", "toRaw",
 ];
 
+export interface CompileResult {
+  code: string;
+  /** Source map (si options.sourceMap es true). */
+  map?: string;
+}
+
+export function compile(source: string, options: CompileOptions & { sourceMap: true }): CompileResult;
+export function compile(source: string, options?: CompileOptions): string;
 export function compile(
   source: string,
   options: CompileOptions = {},
-): string {
+): CompileResult | string {
   const importPath = options.importPath ?? "belzium";
 
   const ast = new ASTBuilder(source).build();
-  let output = generate(ast);
+  const lowered: LoweredTopLevelNode[] = lowerTemplate(ast.body);
+  let output = generate(lowered);
   output = injectSelectors(output);
   output = output.replace(/\btemplate(\s*\([^)]*\)\s*\{)/g, "render$1");
 
@@ -47,6 +61,18 @@ export function compile(
     imports.length > 0
       ? `import { ${imports.join(", ")} } from ${JSON.stringify(importPath)};\n\n`
       : "";
+
+  if (options.sourceMap) {
+    const ms = buildOutputMagicString(source, lowered, header);
+    const code = ms.toString();
+    const map = ms.generateMap({
+      source: "source.bel",
+      includeContent: true,
+      hires: true,
+      file: "output.ts",
+    });
+    return { code, map: map.toString() };
+  }
 
   return header + output;
 }
