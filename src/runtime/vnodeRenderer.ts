@@ -23,10 +23,18 @@ import { ComponentProps, createProps, updateProps } from "../component/props";
 import { isOutput } from "../component/output";
 import { isInput, type Input } from "../component/input";
 import { toRaw } from "../reactive/reactiveContext";
+import { ref } from "../reactive/ref";
 const componentProps = new WeakMap<
   RenderableComponent,
   ComponentProps<Record<string, unknown>>
 >();
+
+// Slots actualizables de cada instancia.
+//
+// Se guardan como un ref para que el cambio de
+// slots (re-render del padre) dispare el render
+// del componente hijo que los consume.
+const componentSlots = new WeakMap<RenderableComponent, ReturnType<typeof ref>>();
 
 // Suscripciones de outputs de una instancia.
 // Se almacenan para poder cancelarlas al desmontar.
@@ -585,7 +593,16 @@ export function mountComponent(
 
   // Expone los slots en la instancia para
   // que render() pueda consumirlos vía this.slots.
-  (instance as RenderableComponent & { slots?: Slots }).slots = slots;
+  //
+  // Se exponen mediante un getter respaldado por un
+  // ref: al actualizarse (re-render del padre) el
+  // render del componente se dispara de nuevo.
+  const currentSlots = ref<Slots>(slots);
+  componentSlots.set(instance, currentSlots);
+  Object.defineProperty(instance, "slots", {
+    get: () => currentSlots.value,
+    configurable: true,
+  });
   const previousSlots = useSlots();
   const previousComponentScope = getCurrentComponentScope();
   setSlots(slots);
@@ -817,6 +834,20 @@ function updateComponent(
   // Actualiza las props manteniendo
   // la identidad del objeto reactivo
   updateProps(props.target, (newVNode.props ?? {}) as Record<string, unknown>);
+
+  // Actualiza los slots del componente:
+  // el padre re-renderizó con contenido nuevo.
+  //
+  // El cambio del ref dispara el render del
+  // hijo, que vuelve a evaluar this.slots.
+  const currentSlots = componentSlots.get(component.instance);
+  if (currentSlots) {
+    const newSlots: Slots = {
+      default: () => newVNode.children,
+      ...((newVNode.props?.slots ?? {}) as Slots),
+    };
+    currentSlots.value = newSlots;
+  }
 
   // Crea getters para props nuevas que
   // no existían durante el montaje inicial.

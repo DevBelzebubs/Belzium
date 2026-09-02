@@ -1,5 +1,5 @@
 import { it, expect } from "vitest";
-import { Component, useSlots } from "../src";
+import { Component, ref, useSlots } from "../src";
 import type { Slots } from "../src";
 import { h, text } from "../src/runtime/vnode";
 import { patch } from "../src/runtime/vnodeRenderer";
@@ -115,4 +115,39 @@ it("un slot se evalúa al renderizarlo", () => {
   slots?.default?.();
 
   expect(executions).toBe(1);
+});
+it("actualiza los slots cuando el padre re-renderiza", () => {
+  const parentState = ref("A");
+
+  @Component()
+  class Card {
+    slots!: Slots;
+
+    render() {
+      return h("div", null, this.slots.default?.() ?? []);
+    }
+  }
+
+  @Component()
+  class Parent {
+    render() {
+      return h("div", null, [h(Card, null, [text(parentState.value)])]);
+    }
+  }
+
+  const context = new ApplicationContext();
+  context.registerProvider({ provide: Card, useClass: Card });
+  context.registerProvider({ provide: Parent, useClass: Parent });
+
+  const container = document.createElement("div");
+
+  const vnode = h(Parent);
+
+  patch(null, vnode, container, 0, context);
+
+  expect(container.textContent).toBe("A");
+
+  parentState.value = "B";
+
+  expect(container.textContent).toBe("B");
 });
