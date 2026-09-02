@@ -274,6 +274,24 @@ class App {
     expect(code).toContain('h("p", null, [text("Works")])');
   });
 
+  it("acepta literales RegExp dentro de expresiones", () => {
+    const code = compile(`@Component()
+class App {
+  render() {
+    return (
+      <div>
+        <if condition={/^[{]$/.test(this.value)}>
+          <p>Yes</p>
+        </if>
+      </div>
+    );
+  }
+}`);
+
+    expect(code).toContain("/^[{]$/.test(this.value)");
+    expect(code).toContain('h("p", null, [text("Yes")])');
+  });
+
   it("compila <else-if> encadenado correctamente", () => {
     const code = compile(`@Component()
 class App {

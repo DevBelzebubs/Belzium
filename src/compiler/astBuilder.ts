@@ -375,6 +375,41 @@ export class ASTBuilder {
         this.i += 2;
         continue;
       }
+      // Literal RegExp: salta hasta su "/" de cierre sin
+      // interpretar llaves/paréntesis que aparezcan dentro
+      // del patrón (ej: /[{]$/ o /a\/b{2}/).
+      if (ch === "/" && isRegexStart(this.src[this.i - 1])) {
+        this.i++;
+        while (this.i < this.src.length) {
+          const rc = this.src[this.i];
+          if (rc === "\\") {
+            this.i += 2;
+            continue;
+          }
+          if (rc === "[") {
+            this.i++;
+            while (this.i < this.src.length) {
+              const cc = this.src[this.i];
+              if (cc === "\\") {
+                this.i += 2;
+                continue;
+              }
+              if (cc === "]") {
+                this.i++;
+                break;
+              }
+              this.i++;
+            }
+            continue;
+          }
+          if (rc === "/") {
+            this.i++;
+            break;
+          }
+          this.i++;
+        }
+        continue;
+      }
       if (ch === open) {
         depth++;
       } else if (ch === close) {
@@ -455,4 +490,10 @@ export class ASTBuilder {
 function cleanText(raw: string): string {
   if (!raw.trim()) return "";
   return raw.replace(/\s*\n\s*/g, " ").replace(/^\s+/, "");
+}
+
+// Indica si una "/" en el texto puede iniciar un literal RegExp
+// basándose en el token que la precede (donde se espera una expresión).
+function isRegexStart(previous: string): boolean {
+  return previous === "" || /[([{=,:;!&|?+\-*%^~<>]/.test(previous);
 }
