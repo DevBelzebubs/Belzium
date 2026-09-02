@@ -18,6 +18,7 @@ import type {
   AttributeValueNode,
 } from "./nodes";
 import { CompileError } from "./errors";
+import { validateExpression } from "./expressionValidator";
 
 const KEYWORD_PRECEDE_EXPRESSION = new Set([
   "return", "throw", "case", "typeof", "instanceof",
@@ -171,7 +172,8 @@ export class ASTBuilder {
     if (v === "{") {
       const val = this.readBraced();
       const role: ExpressionRole = /^on[A-Z]/.test(name) ? "eventHandler" : "attrValue";
-      return this.makeExpr(role, val, start, this.i);
+      const isDirectiveRolHidden = name === "condition" || name === "value" || name === "test" || name === "key" || name === "each";
+      return this.makeExpr(role, val, start, this.i, isDirectiveRolHidden);
     }
     const val = this.readBareAttrValue();
     return { type: "StringValue", value: val, start, end: this.i };
@@ -271,11 +273,18 @@ export class ASTBuilder {
     if (!match) {
       throw this.error(`Invalid <for> each syntax: expected "item of items"`, start);
     }
+    const iterableSrc = match[2].trim();
+    const iterableOffset = eachAttr.value.type === "Expression"
+      ? eachAttr.value.start + (eachValue.length - iterableSrc.length)
+      : eachAttr.start;
+    validateExpression(iterableSrc, "iterable", iterableOffset, this.src);
 
     const keyAttr = attributes.find(a => a.type === "Attribute" && a.name === "key") as NormalAttributeNode | undefined;
-    const key = keyAttr?.value && keyAttr.value.type === "Expression"
-      ? { type: "Expression", role: "key", source: keyAttr.value.source, start: 0, end: 0 } as ExpressionNode
-      : null;
+    let key: ExpressionNode | null = null;
+    if (keyAttr?.value && keyAttr.value.type === "Expression") {
+      validateExpression(keyAttr.value.source, "key", keyAttr.value.start, this.src);
+      key = { type: "Expression", role: "key", source: keyAttr.value.source, start: keyAttr.value.start, end: keyAttr.value.end } as ExpressionNode;
+    }
 
     this.i++;
     const children = this.parseChildren();
@@ -334,16 +343,21 @@ export class ASTBuilder {
     return this.exprFromAttrValue(attr.value, role);
   }
 
-  private exprFromAttrValue(value: AttributeValueNode, role: ExpressionRole): ExpressionNode {
+  private exprFromAttrValue(value: AttributeValueNode, role: ExpressionRole, start?: number, end?: number): ExpressionNode {
+    const s = start ?? value.start;
+    const e = end ?? value.end;
     if (value.type === "Expression") {
-      return { type: "Expression", role, source: value.source, start: 0, end: 0 } as ExpressionNode;
+      return this.makeExpr(role, value.source, s, e);
     }
     // Soporta literales: <switch value="a"> y <case test="b"> compilan a
     // switch ("a") y case "b": con un StringValue se emite un literal.
-    return { type: "Expression", role, source: JSON.stringify(value.value), start: 0, end: 0 } as ExpressionNode;
+    return { type: "Expression", role, source: JSON.stringify(value.value), start: s, end: e } as ExpressionNode;
   }
 
-  private makeExpr(role: ExpressionRole, source: string, start = 0, end = 0): ExpressionNode {
+  private makeExpr(role: ExpressionRole, source: string, start = 0, end = 0, skip = false): ExpressionNode {
+    if (!skip && start > 0) {
+      validateExpression(source, role, start, this.src);
+    }
     return { type: "Expression", role, source, start, end };
   }
 

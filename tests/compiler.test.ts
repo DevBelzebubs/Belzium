@@ -475,6 +475,107 @@ class App {
     } catch (err) {
       const e = err as CompileError;
       expect(e.message).toMatch(/each.*expression/i);
+      expect(e.errorKind).toBe("template");
+    }
+  });
+
+  it("lanza CompileError si la interpolación de texto tiene sintaxis inválida", () => {
+    const source = `@Component()
+class App {
+  render() {
+    return <div>{this.count.}</div>;
+  }
+}`;
+    try {
+      compile(source);
+      expect.unreachable("deberia lanzar");
+    } catch (err) {
+      expect(err).toBeInstanceOf(CompileError);
+      const e = err as CompileError;
+      expect(e.message).toMatch(/interpolación de texto inválida/);
+      expect(e.line).toBeGreaterThan(0);
+      expect(e.errorKind).toBe("expression");
+    }
+  });
+
+  it("lanza CompileError si un handler de evento tiene sintaxis inválida", () => {
+    const source = `@Component()
+class App {
+  render() {
+    return <button onClick={this.handle(}>X</button>;
+  }
+}`;
+    try {
+      compile(source);
+      expect.unreachable("deberia lanzar");
+    } catch (err) {
+      expect(err).toBeInstanceOf(CompileError);
+      const e = err as CompileError;
+      expect(e.message).toMatch(/handler de evento inválida/);
+    }
+  });
+
+  it("lanza CompileError si la condición de <if> tiene sintaxis inválida", () => {
+    const source = `@Component()
+class App {
+  render() {
+    return (
+      <if condition={a b c}>
+        <p>Hi</p>
+      </if>
+    );
+  }
+}`;
+    try {
+      compile(source);
+      expect.unreachable("deberia lanzar");
+    } catch (err) {
+      expect(err).toBeInstanceOf(CompileError);
+      const e = err as CompileError;
+      expect(e.message).toMatch(/condición de <if> inválida/);
+    }
+  });
+
+  it("acepta expresiones sintácticamente válidas sin romper", () => {
+    const source = `@Component()
+class App {
+  render() {
+    const tests = [
+      /^[{]$/.test(this.value),
+      this.a ? this.b : this.c,
+      this.items.map((i) => i * 2),
+      (() => { return 1; })(),
+      \`hola \${this.name}\`,
+    ];
+    return (
+      <div>
+        <if condition={this.a > 0 && this.b === "x"}>
+          <p>{String(tests.length)}</p>
+        </if>
+        <for each={item of this.items} key={item.id}>
+          <span>{item.name}</span>
+        </for>
+      </div>
+    );
+  }
+}`;
+    expect(() => compile(source)).not.toThrow();
+  });
+
+  it("marca errorKind 'template' para errores de sintaxis XML del template", () => {
+    const source = `@Component()
+class App {
+  render() {
+    return <div><span></div>;
+  }
+}`;
+    try {
+      compile(source);
+      expect.unreachable("deberia lanzar");
+    } catch (err) {
+      expect(err).toBeInstanceOf(CompileError);
+      const e = err as CompileError;
+      expect(e.errorKind).toBe("template");
     }
   });
 });
