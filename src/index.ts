@@ -188,3 +188,31 @@ export {
 export type {
   DirectiveMetadata,
 } from "./component/directive";
+
+// ============================================================
+// PIPELINES
+// ============================================================
+
+// Definición de pipelines (flujo de nodos).
+export {
+  Pipeline,
+  getPipelineMetadata,
+  PIPELINE_METADATA,
+} from "./pipeline/decorator";
+
+export type {
+  PipelineMetadata,
+  PipelineNode,
+  PipelineNodeOptions,
+  PipelineNodeType,
+} from "./pipeline/types";
+
+export {
+  createNode,
+  link,
+  isPipelineNode,
+} from "./pipeline/node";
+
+export {
+  PipelineGraph,
+} from "./pipeline/graph";
